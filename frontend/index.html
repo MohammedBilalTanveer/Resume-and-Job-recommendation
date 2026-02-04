@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resume ATS Scorer & Job Recommendation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .ats-score { width: 120px; height: 120px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: bold; color: white; }
+        .score-high { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+        .score-medium { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+        .score-low { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="min-h-screen">
+        <!-- Header -->
+        <header class="bg-white shadow">
+            <nav class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+                <h1 class="text-2xl font-bold text-blue-600">Resume ATS Scorer</h1>
+                <div class="flex gap-4">
+                    <button onclick="showTab('analyzer')" class="px-4 py-2 text-gray-700 hover:text-blue-600">Analyzer</button>
+                    <button onclick="showTab('jobs')" class="px-4 py-2 text-gray-700 hover:text-blue-600">Jobs</button>
+                </div>
+            </nav>
+        </header>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto px-4 py-8">
+            <!-- Analyzer Tab -->
+            <div id="analyzer" class="tab-content">
+                <div class="grid md:grid-cols-2 gap-8">
+                    <!-- Upload Section -->
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h2 class="text-xl font-bold mb-4">Upload Resume</h2>
+                        <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-blue-500" onclick="document.getElementById('resumeFile').click()">
+                            <p class="text-gray-600 mb-2">📄 Click to upload or drag file</p>
+                            <p class="text-sm text-gray-400">PDF, DOCX, or TXT</p>
+                            <input type="file" id="resumeFile" hidden accept=".pdf,.docx,.txt" onchange="handleFileUpload(event)">
+                        </div>
+                        <div id="fileInfo" class="mt-4 hidden">
+                            <p class="text-sm text-green-600" id="fileName"></p>
+                        </div>
+
+                        <h3 class="text-lg font-bold mt-6 mb-2">Job Description (Optional)</h3>
+                        <textarea id="jobDesc" class="w-full h-32 border border-gray-300 rounded p-3 text-sm" placeholder="Paste job description here for ATS scoring..."></textarea>
+
+                        <button onclick="analyzeResume()" class="w-full mt-4 bg-blue-600 text-white py-2 rounded hover:bg-blue-700 font-semibold">
+                            <span id="analyzeBtn">Analyze Resume</span>
+                            <span id="analyzeLoader" class="hidden">Processing...</span>
+                        </button>
+                    </div>
+
+                    <!-- Results Section -->
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h2 class="text-xl font-bold mb-4">Analysis Results</h2>
+                        <div id="results" class="hidden space-y-4">
+                            <!-- ATS Score -->
+                            <div class="text-center mb-6">
+                                <p class="text-gray-600 mb-2">ATS Score</p>
+                                <div id="scoreCircle" class="ats-score mx-auto"></div>
+                            </div>
+
+                            <!-- Extracted Info -->
+                            <div id="extractedInfo" class="space-y-3 text-sm"></div>
+
+                            <!-- Matching Keywords -->
+                            <div>
+                                <p class="font-semibold text-green-700 mb-2">✅ Matching Keywords:</p>
+                                <div id="matchingKeywords" class="flex flex-wrap gap-2"></div>
+                            </div>
+
+                            <!-- Missing Keywords -->
+                            <div>
+                                <p class="font-semibold text-red-700 mb-2">❌ Missing Keywords:</p>
+                                <div id="missingKeywords" class="flex flex-wrap gap-2"></div>
+                            </div>
+                        </div>
+
+                        <div id="noResults" class="text-gray-400 text-center py-8">
+                            Upload a resume to see analysis
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Jobs Tab -->
+            <div id="jobs" class="tab-content hidden">
+                <div class="bg-white rounded-lg shadow p-6 mb-8">
+                    <h2 class="text-xl font-bold mb-4">Find Jobs</h2>
+                    <div class="grid md:grid-cols-3 gap-4">
+                        <input type="text" id="jobLocation" class="border border-gray-300 rounded px-3 py-2" placeholder="Location">
+                        <input type="number" id="topK" class="border border-gray-300 rounded px-3 py-2" placeholder="Number of jobs" value="5">
+                        <button onclick="searchJobs()" class="bg-green-600 text-white rounded hover:bg-green-700 font-semibold">Search Jobs</button>
+                    </div>
+                </div>
+
+                <div id="jobsResults" class="grid md:grid-cols-2 gap-6"></div>
+                <div id="noJobs" class="text-gray-400 text-center py-8">Search for jobs to see results</div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000/api/v1';
+        let resumeText = '';
+
+        function showTab(tab) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById(tab).classList.remove('hidden');
+        }
+
+        function handleFileUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                resumeText = evt.target.result;
+                document.getElementById('fileInfo').classList.remove('hidden');
+                document.getElementById('fileName').textContent = `✓ ${file.name} uploaded`;
+            };
+            reader.readAsText(file);
+        }
+
+        async function analyzeResume() {
+            if (!resumeText) {
+                alert('Please upload a resume first');
+                return;
+            }
+
+            const jobDesc = document.getElementById('jobDesc').value;
+            document.getElementById('analyzeBtn').classList.add('hidden');
+            document.getElementById('analyzeLoader').classList.remove('hidden');
+
+            try {
+                let response;
+                if (jobDesc) {
+                    response = await axios.post(`${API_BASE}/resume/score`, {
+                        resume_text: resumeText,
+                        job_description: jobDesc
+                    });
+                } else {
+                    response = await axios.post(`${API_BASE}/resume/extract-skills`, {
+                        text: resumeText
+                    });
+                }
+
+                const data = response.data;
+                displayResults(data, jobDesc);
+            } catch (err) {
+                alert('Error: ' + (err.response?.data?.detail || err.message));
+            } finally {
+                document.getElementById('analyzeBtn').classList.remove('hidden');
+                document.getElementById('analyzeLoader').classList.add('hidden');
+            }
+        }
+
+        function displayResults(data, hasJobDesc) {
+            document.getElementById('noResults').classList.add('hidden');
+            document.getElementById('results').classList.remove('hidden');
+
+            // Score Circle
+            if (data.ats_score !== undefined) {
+                const score = Math.round(data.ats_score);
+                const scoreClass = score >= 80 ? 'score-high' : score >= 60 ? 'score-medium' : 'score-low';
+                document.getElementById('scoreCircle').className = `ats-score ${scoreClass}`;
+                document.getElementById('scoreCircle').textContent = score;
+            }
+
+            // Extracted Info
+            let infoHTML = '';
+            if (data.contact_info?.email) infoHTML += `<p><strong>Email:</strong> ${data.contact_info.email}</p>`;
+            if (data.contact_info?.phone) infoHTML += `<p><strong>Phone:</strong> ${data.contact_info.phone}</p>`;
+            if (data.contact_info?.linkedin) infoHTML += `<p><strong>LinkedIn:</strong> ${data.contact_info.linkedin}</p>`;
+            if (data.experience_years) infoHTML += `<p><strong>Experience:</strong> ${data.experience_years} years</p>`;
+            if (data.education) infoHTML += `<p><strong>Education:</strong> ${data.education}</p>`;
+            if (data.skills) infoHTML += `<p><strong>Skills:</strong> ${data.skills.join(', ')}</p>`;
+            document.getElementById('extractedInfo').innerHTML = infoHTML || '<p class="text-gray-400">No data extracted</p>';
+
+            // Keywords
+            const matchingHTML = (data.matching_keywords || []).map(k => `<span class="bg-green-100 text-green-800 px-3 py-1 rounded text-xs">${k}</span>`).join('');
+            const missingHTML = (data.missing_keywords || []).map(k => `<span class="bg-red-100 text-red-800 px-3 py-1 rounded text-xs">${k}</span>`).join('');
+            
+            document.getElementById('matchingKeywords').innerHTML = matchingHTML || '<span class="text-gray-400 text-xs">None</span>';
+            document.getElementById('missingKeywords').innerHTML = missingHTML || '<span class="text-gray-400 text-xs">None</span>';
+        }
+
+        async function searchJobs() {
+            const location = document.getElementById('jobLocation').value || 'USA';
+            const topK = parseInt(document.getElementById('topK').value) || 5;
+
+            try {
+                const response = await axios.get(`${API_BASE}/jobs/search`, {
+                    params: { keyword: 'software', location, top_k: topK }
+                });
+
+                const jobsHTML = response.data.jobs.map(job => `
+                    <div class="bg-white rounded-lg shadow p-4 border-l-4 border-blue-500">
+                        <h3 class="font-bold text-lg">${job.title || 'Job Title'}</h3>
+                        <p class="text-sm text-gray-600">${job.company || 'Company'}</p>
+                        <p class="text-sm text-gray-500 mt-2">${job.location || location}</p>
+                        <a href="${job.url}" target="_blank" class="text-blue-600 hover:underline text-sm mt-3 inline-block">View Job →</a>
+                    </div>
+                `).join('');
+
+                document.getElementById('jobsResults').innerHTML = jobsHTML;
+                document.getElementById('noJobs').classList.add('hidden');
+            } catch (err) {
+                alert('Error: ' + (err.response?.data?.detail || err.message));
+            }
+        }
+    </script>
+</body>
+</html>

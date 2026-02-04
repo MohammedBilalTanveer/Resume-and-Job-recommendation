@@ -1,0 +1,18 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+COPY frontend/package.json frontend/package-lock.json ./
+
+RUN npm install
+
+COPY frontend/public ./public
+COPY frontend/src ./src
+COPY frontend/*.js ./
+COPY frontend/*.html ./
+
+EXPOSE 3000
+
+ENV REACT_APP_API_URL=http://localhost:8000/api/v1
+
+CMD ["npm", "start"]
