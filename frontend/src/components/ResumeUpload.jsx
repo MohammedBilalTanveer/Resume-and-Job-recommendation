@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { resumeAPI } from '../api/client';
+import { resumeAPI, historyAPI } from '../api/client';
 import { useResumeStore } from '../store';
+import useAuthStore from '../store/authStore';
 import { LoadingSpinner } from './Common';
-import { FiUploadCloud, FiX, FiFileText, FiCheckCircle } from 'react-icons/fi';
+import { FiUploadCloud, FiX, FiFileText, FiCheckCircle, FiSave } from 'react-icons/fi';
 
 export const ResumeUpload = ({ onSuccess }) => {
   const [file, setFile] = useState(null);
@@ -10,8 +11,10 @@ export const ResumeUpload = ({ onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [savedToHistory, setSavedToHistory] = useState(false);
 
   const { setResume, setResumeText, setAtsAnalysis, setExtractedInfo, reset } = useResumeStore();
+  const { isAuthenticated } = useAuthStore();
 
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
@@ -40,6 +43,7 @@ export const ResumeUpload = ({ onSuccess }) => {
     setLoading(true);
     setError(null);
     reset(); // Clear previous data
+    setSavedToHistory(false);
 
     try {
       const response = await resumeAPI.uploadResume(file, jobDescription);
@@ -57,6 +61,30 @@ export const ResumeUpload = ({ onSuccess }) => {
         setAtsAnalysis(null);
       }
 
+      // Auto-save to history if authenticated
+      if (isAuthenticated) {
+        try {
+          const analysisData = data.ats_analysis || {};
+          await historyAPI.saveAnalysis({
+            filename: file.name,
+            resume_text: data.resume_text,
+            job_description: jobDescription || null,
+            ats_score: analysisData.overall_score || analysisData.score || null,
+            skills: analysisData.skills || data.extracted_info?.skills || [],
+            experience_years: analysisData.experience_years || data.extracted_info?.experience_years || null,
+            education: analysisData.education || data.extracted_info?.education || [],
+            certifications: analysisData.certifications || data.extracted_info?.certifications || [],
+            matching_keywords: analysisData.matching_keywords || [],
+            missing_keywords: analysisData.missing_keywords || [],
+            analysis_result: data.ats_analysis || data.extracted_info || null,
+          });
+          setSavedToHistory(true);
+        } catch (saveErr) {
+          console.error('Failed to save to history:', saveErr);
+          // Don't show error - upload was still successful
+        }
+      }
+
       setUploadSuccess(true);
       onSuccess?.(data);
     } catch (err) {
@@ -71,6 +99,7 @@ export const ResumeUpload = ({ onSuccess }) => {
     setFile(null);
     setJobDescription('');
     setUploadSuccess(false);
+    setSavedToHistory(false);
     setError(null);
     reset();
   };
@@ -80,13 +109,21 @@ export const ResumeUpload = ({ onSuccess }) => {
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold text-white">Upload Your Resume</h2>
         {uploadSuccess && (
-          <button
-            type="button"
-            onClick={handleReset}
-            className="text-sm text-blue-400 hover:text-blue-300"
-          >
-            Upload New Resume
-          </button>
+          <div className="flex items-center gap-3">
+            {savedToHistory && (
+              <span className="flex items-center gap-1 text-sm text-green-400">
+                <FiSave className="w-4 h-4" />
+                Saved
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={handleReset}
+              className="text-sm text-blue-400 hover:text-blue-300"
+            >
+              Upload New Resume
+            </button>
+          </div>
         )}
       </div>
 

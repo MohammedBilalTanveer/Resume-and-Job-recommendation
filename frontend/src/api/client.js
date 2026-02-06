@@ -9,6 +9,39 @@ const api = axios.create({
   },
 });
 
+// Helper to get token from localStorage (zustand persist storage)
+const getStoredToken = () => {
+  try {
+    const authStorage = localStorage.getItem('auth-storage');
+    if (authStorage) {
+      const parsed = JSON.parse(authStorage);
+      return parsed?.state?.accessToken || null;
+    }
+  } catch (e) {
+    console.error('Error reading auth token from storage:', e);
+  }
+  return null;
+};
+
+// Add request interceptor to automatically include auth token
+api.interceptors.request.use(
+  (config) => {
+    // Get token from axios defaults (set by setAuth) or localStorage (for page refresh)
+    const defaultToken = api.defaults.headers.common['Authorization'];
+    const storedToken = getStoredToken();
+    
+    // Use default token if available, otherwise fall back to stored token
+    const token = defaultToken || (storedToken ? `Bearer ${storedToken}` : null);
+    
+    if (token) {
+      config.headers['Authorization'] = token;
+    }
+    
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
 // Resume endpoints
 export const resumeAPI = {
   uploadResume: (file, jobDescription) => {
@@ -67,6 +100,27 @@ export const jobsAPI = {
   
   getSkillsDemand: () =>
     api.get('/jobs/skills-demand'),
+};
+
+// History endpoints
+export const historyAPI = {
+  saveAnalysis: (data) =>
+    api.post('/history/save', data),
+  
+  listAnalyses: (skip = 0, limit = 10) =>
+    api.get('/history/list', { params: { skip, limit } }),
+  
+  getLatestAnalysis: () =>
+    api.get('/history/latest'),
+  
+  getAnalysis: (id) =>
+    api.get(`/history/${id}`),
+  
+  deleteAnalysis: (id) =>
+    api.delete(`/history/${id}`),
+  
+  getAnalysisCount: () =>
+    api.get('/history/count/total'),
 };
 
 // Models endpoints

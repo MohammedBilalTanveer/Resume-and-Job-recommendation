@@ -1,7 +1,10 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import useAuthStore from '../../store/authStore';
 
 const Hero = () => {
+    const { isAuthenticated } = useAuthStore();
+
     return (
         <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-slate-900">
             {/* Background Image with Overlay */}
@@ -49,18 +52,35 @@ const Hero = () => {
                     </p>
 
                     <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-                        <Link to="/analyzer" className="btn-primary group">
-                            <span className="relative z-10 flex items-center gap-2">
-                                Analyze Resume
-                                <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                                </svg>
-                            </span>
-                        </Link>
-
-                        <Link to="/jobs" className="btn-secondary flex items-center gap-2">
-                            Explore Jobs
-                        </Link>
+                        {isAuthenticated ? (
+                            <>
+                                <Link to="/analyzer" className="btn-primary group">
+                                    <span className="relative z-10 flex items-center gap-2">
+                                        Analyze Resume
+                                        <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                        </svg>
+                                    </span>
+                                </Link>
+                                <Link to="/jobs" className="btn-secondary flex items-center gap-2">
+                                    Explore Jobs
+                                </Link>
+                            </>
+                        ) : (
+                            <>
+                                <Link to="/signup" className="btn-primary group">
+                                    <span className="relative z-10 flex items-center gap-2">
+                                        Get Started Free
+                                        <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                        </svg>
+                                    </span>
+                                </Link>
+                                <Link to="/login" className="btn-secondary flex items-center gap-2">
+                                    Sign In
+                                </Link>
+                            </>
+                        )}
                     </div>
                 </div>
 

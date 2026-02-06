@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Query
 from typing import Optional, List
+from pydantic import BaseModel
 import sys
 from pathlib import Path
 
@@ -11,6 +12,17 @@ from backend.utils.ats_scorer import ATSScorer
 router = APIRouter()
 job_service = JobService()
 ats_scorer = ATSScorer()
+
+# Pydantic models for request bodies
+class RecommendJobsRequest(BaseModel):
+    resume_text: str
+    top_k: int = 5
+    location: Optional[str] = None
+
+class MatchResumeRequest(BaseModel):
+    resume_text: str
+    job_id: Optional[str] = None
+    job_description: Optional[str] = None
 
 @router.get("/search")
 async def search_jobs(
@@ -40,21 +52,17 @@ async def search_jobs(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/recommend")
-async def recommend_jobs(
-    resume_text: str,
-    top_k: int = 5,
-    location: Optional[str] = None
-):
+async def recommend_jobs(request: RecommendJobsRequest):
     """
     Get job recommendations based on resume content.
     Uses extracted skills to find matching jobs.
     """
     try:
-        if not resume_text:
+        if not request.resume_text:
             raise HTTPException(status_code=400, detail="resume_text is required")
         
         # Extract skills from resume
-        resume_data = ats_scorer.extract_resume_info(resume_text)
+        resume_data = ats_scorer.extract_resume_info(request.resume_text)
         skills = resume_data.get("skills", [])
         
         if not skills:
@@ -63,8 +71,8 @@ async def recommend_jobs(
         # Search for jobs based on extracted skills
         recommendations = await job_service.get_recommendations(
             skills=skills,
-            top_k=top_k,
-            location=location
+            top_k=request.top_k,
+            location=request.location
         )
         
         return {
@@ -77,26 +85,22 @@ async def recommend_jobs(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/match-resume-to-job")
-async def match_resume_to_job(
-    resume_text: str,
-    job_id: Optional[str] = None,
-    job_description: Optional[str] = None
-):
+async def match_resume_to_job(request: MatchResumeRequest):
     """
     Calculate match score between resume and specific job.
     """
     try:
-        if job_id and job_description:
+        if request.job_id and request.job_description:
             raise HTTPException(
                 status_code=400,
                 detail="Provide either job_id or job_description, not both"
             )
         
-        if job_description:
-            target_job_desc = job_description
-        elif job_id:
+        if request.job_description:
+            target_job_desc = request.job_description
+        elif request.job_id:
             # Fetch job description from API
-            target_job_desc = await job_service.get_job_description(job_id)
+            target_job_desc = await job_service.get_job_description(request.job_id)
         else:
             raise HTTPException(
                 status_code=400,
@@ -104,10 +108,10 @@ async def match_resume_to_job(
             )
         
         # Calculate ATS score
-        ats_result = ats_scorer.calculate_ats_score(resume_text, target_job_desc)
+        ats_result = ats_scorer.calculate_ats_score(request.resume_text, target_job_desc)
         
         return {
-            "job_id": job_id,
+            "job_id": request.job_id,
             "match_score": ats_result["score"],
             "matching_keywords": ats_result["matching_keywords"],
             "missing_keywords": ats_result["missing_keywords"],

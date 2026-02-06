@@ -1,5 +1,29 @@
 import React from 'react';
+import DOMPurify from 'dompurify';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+
+// SafeHTML component to sanitize and render HTML content
+export const SafeHTML = ({ html, className = '', truncate = false }) => {
+  if (!html) return null;
+  
+  const sanitized = DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: ['p', 'br', 'strong', 'b', 'em', 'i', 'ul', 'ol', 'li', 'a', 'span', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
+    ALLOWED_ATTR: ['href', 'target', 'rel'],
+  });
+  
+  // For truncated preview, strip HTML and show plain text
+  if (truncate) {
+    const plainText = sanitized.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    return <span className={className}>{plainText}</span>;
+  }
+  
+  return (
+    <div 
+      className={className}
+      dangerouslySetInnerHTML={{ __html: sanitized }}
+    />
+  );
+};
 
 export const ATSScoreDisplay = ({ score }) => {
   const percentage = Math.round(score * 100);
@@ -109,7 +133,9 @@ export const JobCard = ({ job, onClick }) => (
     <h3 className="text-lg font-bold text-white group-hover:text-blue-400 transition-colors">{job.title}</h3>
     <p className="text-sm text-slate-400 mt-1">{job.company}</p>
     <p className="text-sm text-slate-500 mt-2">{job.location}</p>
-    <p className="text-sm text-slate-300 mt-3 line-clamp-2">{job.description}</p>
+    <p className="text-sm text-slate-300 mt-3 line-clamp-2">
+      <SafeHTML html={job.description} truncate={true} />
+    </p>
     <div className="mt-4 flex justify-between items-center">
       <span className="text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-1 rounded">
         {job.source}

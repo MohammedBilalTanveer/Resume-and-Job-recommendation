@@ -2,6 +2,7 @@ from pydantic_settings import BaseSettings
 from typing import List, Optional
 import os
 from pathlib import Path
+import secrets
 
 # Load .env from backend folder
 from dotenv import load_dotenv
@@ -24,8 +25,23 @@ class Settings(BaseSettings):
     # ML Models
     MODEL_FOLDER: str = os.path.join(os.path.dirname(__file__), "../ml_models")
     
-    # Database
-    DATABASE_URL: str = "sqlite:///./resume_ats.db"
+    # MongoDB Database
+    MONGODB_URL: str = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
+    MONGODB_DB_NAME: str = os.getenv("MONGODB_DB_NAME", "resume_ats")
+    
+    # Security
+    SECRET_KEY: str = os.getenv("SECRET_KEY", secrets.token_urlsafe(32))
+    
+    # OAuth - Google
+    GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
+    GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
+    
+    # OAuth - GitHub
+    GITHUB_CLIENT_ID: str = os.getenv("GITHUB_CLIENT_ID", "")
+    GITHUB_CLIENT_SECRET: str = os.getenv("GITHUB_CLIENT_SECRET", "")
+    
+    # Frontend URL for OAuth redirects
+    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
     
     # OpenAI API
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")

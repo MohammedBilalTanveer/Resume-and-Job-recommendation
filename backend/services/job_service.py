@@ -15,6 +15,32 @@ class JobService:
         self.adzuna_app_key = settings.ADZUNA_APP_KEY
         self.jooble_key = settings.JOOBLE_API_KEY
     
+    def _deduplicate_jobs(self, jobs: List[Dict]) -> List[Dict]:
+        """
+        Remove duplicate job postings based on company + description similarity.
+        Same company posting the same job in multiple locations will be deduplicated.
+        """
+        if not jobs:
+            return jobs
+        
+        seen = set()
+        unique_jobs = []
+        
+        for job in jobs:
+            # Create a fingerprint based on company + first 200 chars of description
+            company = (job.get("company") or "").lower().strip()
+            description = (job.get("description") or "").lower()[:200].strip()
+            title = (job.get("title") or "").lower().strip()
+            
+            # Fingerprint: company + truncated description (ignores location variations)
+            fingerprint = f"{company}|{description}"
+            
+            if fingerprint not in seen:
+                seen.add(fingerprint)
+                unique_jobs.append(job)
+        
+        return unique_jobs
+    
     async def search_jobs(
         self,
         keyword: str,
@@ -43,6 +69,9 @@ class JobService:
         except Exception as e:
             print(f"Error searching jobs: {e}")
         
+        # Deduplicate jobs (same company posting same job to multiple locations)
+        results = self._deduplicate_jobs(results)
+        
         return results
     
     async def _search_remotive(
@@ -58,8 +87,8 @@ class JobService:
         try:
             async with aiohttp.ClientSession() as session:
                 params = {
-                    "keyword": keyword,
-                    "location": location
+                    "search": keyword,
+                    "limit": 50
                 }
                 
                 async with session.get(self.remotive_url, params=params) as resp:
@@ -67,12 +96,12 @@ class JobService:
                         data = await resp.json()
                         jobs = []
                         
-                        for job in data.get("results", []):
+                        for job in data.get("jobs", []):
                             jobs.append({
-                                "id": job.get("id"),
+                                "id": str(job.get("id")),
                                 "title": job.get("title"),
                                 "company": job.get("company_name"),
-                                "location": job.get("job_location", location),
+                                "location": job.get("candidate_required_location", location),
                                 "description": job.get("description"),
                                 "url": job.get("url"),
                                 "type": job.get("job_type", "Full-time"),
@@ -99,20 +128,20 @@ class JobService:
             if not self.adzuna_app_id or not self.adzuna_app_key:
                 return []
             
-            base_url = f"https://api.adzuna.com/v1/api/jobs"
+            base_url = "https://api.adzuna.com/v1/api/jobs"
             
             async with aiohttp.ClientSession() as session:
                 params = {
                     "app_id": self.adzuna_app_id,
                     "app_key": self.adzuna_app_key,
                     "what": keyword,
-                    "where": location,
+                    "where": location if location != "remote" else "",
                     "results_per_page": 50
                 }
                 
                 # Get country code for location (simplified)
-                country_code = "gb"  # Default to GB, can be extended
-                url = f"{base_url}/{country_code}"
+                country_code = "us"  # Default to US for better results
+                url = f"{base_url}/{country_code}/search/1"
                 
                 async with session.get(url, params=params) as resp:
                     if resp.status == 200:
@@ -150,11 +179,12 @@ class JobService:
             if not self.jooble_key:
                 return []
             
-            url = "https://api.jooble.org/api/v2/search"
+            # Jooble API URL with API key in path
+            url = f"https://jooble.org/api/{self.jooble_key}"
             
             payload = {
                 "keywords": keyword,
-                "location": location
+                "location": location if location != "remote" else ""
             }
             
             headers = {
@@ -165,8 +195,7 @@ class JobService:
                 async with session.post(
                     url,
                     json=payload,
-                    headers=headers,
-                    params={"apiKey": self.jooble_key}
+                    headers=headers
                 ) as resp:
                     if resp.status == 200:
                         data = await resp.json()
@@ -174,20 +203,21 @@ class JobService:
                         
                         for job in data.get("jobs", []):
                             jobs.append({
-                                "id": job.get("id"),
+                                "id": str(job.get("id")),
                                 "title": job.get("title"),
                                 "company": job.get("company"),
                                 "location": job.get("location"),
                                 "description": job.get("snippet"),
                                 "url": job.get("link"),
-                                "type": "Full-time",
+                                "type": job.get("type", "Full-time"),
                                 "posted_date": job.get("updated"),
                                 "source": "jooble",
-                                "salary": "Not specified"
+                                "salary": job.get("salary", "Not specified")
                             })
                         
                         return jobs
                     else:
+                        print(f"Jooble API error: {resp.status}")
                         return []
         
         except Exception as e:
@@ -250,13 +280,8 @@ class JobService:
                 jobs = await self.search_jobs(keyword, location)
                 all_jobs.extend(jobs)
             
-            # Remove duplicates
-            seen = set()
-            unique_jobs = []
-            for job in all_jobs:
-                if job["id"] not in seen:
-                    seen.add(job["id"])
-                    unique_jobs.append(job)
+            # Use deduplication method (handles same job posted to multiple locations)
+            unique_jobs = self._deduplicate_jobs(all_jobs)
             
             return unique_jobs[:limit]
         
