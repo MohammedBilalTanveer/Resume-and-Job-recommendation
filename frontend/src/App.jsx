@@ -9,13 +9,13 @@ import './index.css';
 function App() {
   return (
     <Router>
-      <div className="min-h-screen bg-slate-50">
+      <div className="min-h-screen bg-slate-900 text-slate-200">
         <Navigation />
-        <main className="max-w-7xl mx-auto px-4 py-8">
+        <main>
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route path="/analyzer" element={<Analyzer />} />
-            <Route path="/jobs" element={<Jobs />} />
+            <Route path="/analyzer" element={<div className="max-w-7xl mx-auto px-4 py-24"><Analyzer /></div>} />
+            <Route path="/jobs" element={<div className="max-w-7xl mx-auto px-4 py-24"><Jobs /></div>} />
           </Routes>
         </main>
       </div>

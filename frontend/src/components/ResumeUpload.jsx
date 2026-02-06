@@ -10,7 +10,7 @@ export const ResumeUpload = ({ onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
-  
+
   const { setResume, setResumeText, setAtsAnalysis, setExtractedInfo, reset } = useResumeStore();
 
   const handleFileChange = (e) => {
@@ -19,7 +19,7 @@ export const ResumeUpload = ({ onSuccess }) => {
       const validTypes = ['application/pdf', 'text/plain', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
       const validExtensions = ['.pdf', '.txt', '.docx'];
       const fileExtension = selectedFile.name.toLowerCase().substring(selectedFile.name.lastIndexOf('.'));
-      
+
       if (validTypes.includes(selectedFile.type) || validExtensions.includes(fileExtension)) {
         setFile(selectedFile);
         setError(null);
@@ -47,7 +47,7 @@ export const ResumeUpload = ({ onSuccess }) => {
 
       setResume(file);
       setResumeText(data.resume_text);
-      
+
       // Handle comprehensive analysis response
       if (data.ats_analysis) {
         setAtsAnalysis(data.ats_analysis);
@@ -56,7 +56,7 @@ export const ResumeUpload = ({ onSuccess }) => {
         setExtractedInfo(data.extracted_info);
         setAtsAnalysis(null);
       }
-      
+
       setUploadSuccess(true);
       onSuccess?.(data);
     } catch (err) {
@@ -76,14 +76,14 @@ export const ResumeUpload = ({ onSuccess }) => {
   };
 
   return (
-    <form onSubmit={handleUpload} className="bg-white p-8 rounded-xl shadow-lg">
+    <form onSubmit={handleUpload} className="glass-card p-8 rounded-xl shadow-lg border-none">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-gray-800">Upload Your Resume</h2>
+        <h2 className="text-2xl font-bold text-white">Upload Your Resume</h2>
         {uploadSuccess && (
           <button
             type="button"
             onClick={handleReset}
-            className="text-sm text-blue-600 hover:text-blue-800"
+            className="text-sm text-blue-400 hover:text-blue-300"
           >
             Upload New Resume
           </button>
@@ -92,23 +92,22 @@ export const ResumeUpload = ({ onSuccess }) => {
 
       <div className="space-y-6">
         {/* File Upload */}
-        <div className={`border-2 border-dashed rounded-xl p-8 text-center transition ${
-          uploadSuccess ? 'border-green-300 bg-green-50' : 'border-blue-300 hover:bg-blue-50'
-        }`}>
+        <div className={`border-2 border-dashed rounded-xl p-8 text-center transition ${uploadSuccess ? 'border-green-500/50 bg-green-500/10' : 'border-blue-500/30 hover:bg-blue-500/10 hover:border-blue-500/50'
+          }`}>
           {uploadSuccess ? (
             <div className="flex flex-col items-center">
-              <FiCheckCircle className="w-12 h-12 text-green-500 mb-3" />
-              <p className="text-green-700 font-semibold">{file?.name}</p>
-              <p className="text-sm text-green-600 mt-1">Resume uploaded successfully!</p>
+              <FiCheckCircle className="w-12 h-12 text-green-400 mb-3" />
+              <p className="text-green-400 font-semibold">{file?.name}</p>
+              <p className="text-sm text-green-300 mt-1">Resume uploaded successfully!</p>
             </div>
           ) : (
             <>
-              <FiUploadCloud className="w-12 h-12 mx-auto text-blue-500 mb-3" />
+              <FiUploadCloud className="w-12 h-12 mx-auto text-blue-400 mb-3" />
               <label className="block cursor-pointer">
-                <span className="text-blue-600 font-semibold hover:underline">
+                <span className="text-blue-400 font-semibold hover:text-blue-300 hover:underline">
                   Click to select a file
                 </span>
-                <p className="text-sm text-gray-500 mt-1">Supports PDF, DOCX, TXT</p>
+                <p className="text-sm text-slate-400 mt-1">Supports PDF, DOCX, TXT</p>
                 <input
                   type="file"
                   accept=".pdf,.docx,.txt"
@@ -118,13 +117,13 @@ export const ResumeUpload = ({ onSuccess }) => {
                 />
               </label>
               {file && (
-                <div className="mt-4 flex items-center justify-center gap-2 bg-white px-4 py-2 rounded-lg">
-                  <FiFileText className="text-blue-500" />
-                  <span className="text-sm text-gray-700">{file.name}</span>
+                <div className="mt-4 flex items-center justify-center gap-2 bg-slate-800/50 px-4 py-2 rounded-lg border border-slate-700">
+                  <FiFileText className="text-blue-400" />
+                  <span className="text-sm text-slate-200">{file.name}</span>
                   <button
                     type="button"
                     onClick={() => setFile(null)}
-                    className="text-red-500 hover:text-red-700 ml-2"
+                    className="text-red-400 hover:text-red-300 ml-2"
                   >
                     <FiX />
                   </button>
@@ -136,26 +135,26 @@ export const ResumeUpload = ({ onSuccess }) => {
 
         {/* Job Description */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-slate-300 mb-2">
             Job Description
-            <span className="text-gray-400 font-normal ml-1">(Required for ATS score)</span>
+            <span className="text-slate-500 font-normal ml-1">(Required for ATS score)</span>
           </label>
           <textarea
             value={jobDescription}
             onChange={(e) => setJobDescription(e.target.value)}
             placeholder="Paste the job description here to get your ATS compatibility score, detailed analysis, and personalized recommendations..."
             rows="6"
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition"
+            className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 text-slate-200 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition placeholder-slate-500"
             disabled={loading}
           />
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-slate-500 mt-1">
             Include the full job posting for best results - requirements, responsibilities, and qualifications.
           </p>
         </div>
 
         {/* Error Message */}
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center gap-2">
+          <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-lg flex items-center gap-2">
             <FiX className="w-5 h-5" />
             {error}
           </div>
@@ -165,7 +164,7 @@ export const ResumeUpload = ({ onSuccess }) => {
         <button
           type="submit"
           disabled={!file || loading}
-          className="w-full py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-lg hover:from-blue-700 hover:to-purple-700 disabled:from-gray-400 disabled:to-gray-400 transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-xl"
+          className="w-full py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-lg hover:from-blue-700 hover:to-purple-700 disabled:from-slate-700 disabled:to-slate-700 disabled:text-slate-500 transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-blue-500/25"
         >
           {loading ? (
             <>
@@ -181,7 +180,7 @@ export const ResumeUpload = ({ onSuccess }) => {
 
         {/* Help Text */}
         {!uploadSuccess && (
-          <p className="text-center text-sm text-gray-500">
+          <p className="text-center text-sm text-slate-500">
             Your resume will be analyzed using AI-powered ATS scoring algorithms
           </p>
         )}
