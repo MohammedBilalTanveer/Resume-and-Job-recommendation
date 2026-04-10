@@ -284,39 +284,39 @@ export const AdvancedResumeAnalysis = () => {
       {detailed_analysis && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Strengths */}
-          <div className="bg-green-50 border border-green-200 rounded-xl p-6">
-            <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-green-800">
+          <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-6">
+            <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-green-400">
               <FiCheckCircle />
               Strengths
             </h3>
             <ul className="space-y-3">
               {detailed_analysis.strengths?.map((strength, idx) => (
-                <li key={idx} className="flex items-start gap-2 text-green-700">
+                <li key={idx} className="flex items-start gap-2 text-green-300">
                   <FiCheckCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
                   <span>{strength}</span>
                 </li>
               ))}
               {(!detailed_analysis.strengths || detailed_analysis.strengths.length === 0) && (
-                <li className="text-green-600">Add more relevant content to highlight strengths</li>
+                <li className="text-green-400">Add more relevant content to highlight strengths</li>
               )}
             </ul>
           </div>
 
           {/* Weaknesses */}
-          <div className="bg-red-50 border border-red-200 rounded-xl p-6">
-            <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-red-800">
+          <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6">
+            <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-red-400">
               <FiAlertCircle />
               Areas to Improve
             </h3>
             <ul className="space-y-3">
               {detailed_analysis.weaknesses?.map((weakness, idx) => (
-                <li key={idx} className="flex items-start gap-2 text-red-700">
+                <li key={idx} className="flex items-start gap-2 text-red-300">
                   <FiAlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
                   <span>{weakness}</span>
                 </li>
               ))}
               {(!detailed_analysis.weaknesses || detailed_analysis.weaknesses.length === 0) && (
-                <li className="text-red-600">Great job! No major weaknesses found.</li>
+                <li className="text-red-400">Great job! No major weaknesses found.</li>
               )}
             </ul>
           </div>

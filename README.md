@@ -1,103 +1,1563 @@
-# 📄 Resume ATS Scorer & Job Recommendation System
+# � Career Pilot - AI-Powered Resume & Job Matching Platform
 
-**Status**: ✅ Complete & Production Ready  
-**Version**: 1.0.0  
-**Created**: February 2024  
-**Last Updated**: February 2026
+![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Status](https://img.shields.io/badge/status-production%20ready-brightgreen)
+![License](https://img.shields.io/badge/license-MIT-green)
+
+**Career Pilot** is a comprehensive full-stack AI-powered web application that analyzes resumes, provides detailed ATS (Applicant Tracking System) scores, and recommends personalized job opportunities. Built with cutting-edge machine learning and natural language processing technologies.
+
+---
+
+## 📑 Table of Contents
+
+- [Project Overview](#-project-overview)
+- [Architecture](#-application-architecture)
+- [Complete Application Flow](#-complete-application-flow)
+- [Features](#-key-features)
+- [Tech Stack](#-tech-stack)
+- [System Requirements](#-system-requirements)
+- [Installation & Setup](#-installation--setup)
+- [API Endpoints](#-api-endpoints-documentation)
+- [Frontend Components](#-frontend-structure)
+- [ML/AI Pipeline](#-mlai-pipeline)
+- [Database Schema](#-database-schema)
+- [Configuration](#-configuration)
+- [Deployment](#-deployment)
+- [Contributing](#-contributing)
 
 ---
 
 ## 🎯 Project Overview
 
-**Intellidiots** is a full-stack AI-powered web application that analyzes resumes, calculates ATS (Applicant Tracking System) match scores, and recommends relevant jobs from multiple sources. It uses machine learning, natural language processing, and integrates with 3 major job APIs.
+**Career Pilot** (Intellidiots) is an intelligent career companion that bridges the gap between job seekers and employers. It leverages advanced AI algorithms to:
 
-### What This Application Does:
-1. **Resume Analysis** - Upload PDF/DOCX/TXT files → Extract structured information
-2. **ATS Scoring** - Calculate match percentage against job descriptions using ML
-3. **Job Recommendations** - Get personalized job suggestions based on resume skills
-4. **Skills Analysis** - See trending skills in the job market
-5. **Job Search** - Search across Remotive, Adzuna, and Jooble APIs simultaneously
+- 📄 **Parse & Analyze Resumes**: Extract structured data from PDF, DOCX, and TXT files
+- 🎯 **Calculate ATS Scores**: ML-powered matching between resumes and job descriptions with detailed scoring
+- 💼 **Recommend Jobs**: Personalized job suggestions based on extracted skills and experience
+- 📊 **Skill Analysis**: Market trends and skill demand insights
+- 🔍 **Multi-Source Job Search**: Aggregate jobs from Remotive, Adzuna, and Jooble APIs
+- 🔐 **User Authentication**: Secure OAuth integration (Google, GitHub) + JWT tokens
+
+### What Sets Career Pilot Apart:
+✅ **Multi-Algorithm ATS Scoring** - Ensemble of Random Forest, Gradient Boosting, and Neural Networks  
+✅ **AI-Powered Recommendations** - OpenAI integration for smart improvement suggestions  
+✅ **Real-Time Job Integration** - Search 3 major job boards simultaneously  
+✅ **Skill Categorization** - Automatic categorization of technical and soft skills  
+✅ **Format Analysis** - ATS-friendly document structure validation  
+✅ **Historical Tracking** - Save and compare multiple resumes
 
 ---
 
-## 🚀 Quick Start (Choose One)
+## 🏗️ Application Architecture
 
-### Option 1: Docker (Fastest - 5 minutes)
-```bash
-cd c:\Users\moham\OneDrive\Desktop\intellidiots\intellidiots
-docker-compose up --build
+### System Overview Diagram
+
 ```
-Then open:
-- Frontend: http://localhost:3000
-- Backend: http://localhost:8000
-- API Docs: http://localhost:8000/docs
-
-### Option 2: Local Development (30 minutes)
-
-**Terminal 1 - Backend:**
-```powershell
-cd backend
-python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
-python -m spacy download en_core_web_sm
-cd ..
-uvicorn backend.main:app --reload
+┌─────────────────────────────────────────────────────────────┐
+│                    FRONTEND (React 18)                      │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │ Pages: Home, Login, Analyzer, Jobs, History          │  │
+│  │ Components: Resume Upload, ATS Analysis, Job Lists   │  │
+│  │ State: Zustand (Auth, Resume Data, Job Results)      │  │
+│  └──────────────────────────────────────────────────────┘  │
+└─────────────────────────┬──────────────────────────────────┘
+                          │ Axios HTTP Requests
+                          │ (CORS: http://localhost:3000)
+                          ↓
+┌─────────────────────────────────────────────────────────────┐
+│                 BACKEND (FastAPI + Uvicorn)                │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │ Routes Layer:                                        │  │
+│  │  • /api/v1/auth      (Authentication & OAuth)       │  │
+│  │  • /api/v1/resume    (Upload & ATS Analysis)        │  │
+│  │  • /api/v1/jobs      (Job Search & Recommendations) │  │
+│  │  • /api/v1/history   (Saved Analyses)               │  │
+│  │  • /api/v1/models    (Model Management)             │  │
+│  └──────────────────────────────────────────────────────┘  │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │ Service Layer:                                       │  │
+│  │  • JobService (Multi-API Job Aggregation)           │  │
+│  │  • AuthService (JWT + OAuth Handling)               │  │
+│  │  • ResumeService (File Parsing & Storage)           │  │
+│  └──────────────────────────────────────────────────────┘  │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │ ML/AI Layer:                                         │  │
+│  │  • AdvancedATSScorer (Ensemble Models)              │  │
+│  │  • pdf_parser (Multi-format Resume Extraction)      │  │
+│  │  • model_manager (Model Loading & Inference)        │  │
+│  └──────────────────────────────────────────────────────┘  │
+└─────────────────────────┬──────────────────────────────────┘
+                          │
+        ┌─────────────────┼─────────────────┐
+        ↓                 ↓                 ↓
+┌─────────────┐   ┌──────────────┐   ┌──────────────┐
+│  MongoDB    │   │  ML Models   │   │ External     │
+│  Database   │   │ (PyTorch,    │   │ Job APIs     │
+│             │   │  scikit-learn)   │              │
+│ Collections:│   │              │   │ • Remotive   │
+│ • users     │   │ • RF Model   │   │ • Adzuna     │
+│ • resumes   │   │ • GB Model   │   │ • Jooble     │
+│ • jobs      │   │ • NN Model   │   │              │
+│ • history   │   │ • Vectorizer │   │ OpenAI API   │
+└─────────────┘   │ • Scalers    │   │ (GPT Models) │
+                  └──────────────┘   └──────────────┘
 ```
 
-**Terminal 2 - Frontend:**
-```powershell
-cd frontend
-npm install
-npm start
+---
+
+## 🔄 Complete Application Flow
+
+### User Journey - From Resume to Job Recommendations
+
+#### **Phase 1: Authentication & Landing**
+```
+┌─────────────────────────────────────────────────────┐
+│ 1. User visits http://localhost:3000                │
+│    ↓                                                 │
+│ 2. Home Page displayed (Features, How-it-works)     │
+│    ↓                                                 │
+│ 3. User clicks "Get Started" → Signup/Login page    │
+│    ↓                                                 │
+│ 4. Authentication Options:                          │
+│    • Email/Password Signup (POST /api/v1/auth/signup)│
+│    • Google OAuth (GET /api/v1/auth/google/login)   │
+│    • GitHub OAuth (GET /api/v1/auth/github/login)   │
+│    ↓                                                 │
+│ 5. JWT tokens stored in Zustand + localStorage      │
+│    Access Token + Refresh Token issued              │
+│ └─────────────────────────────────────────────────────┘
 ```
 
-### Option 3: Train Custom ML Models (2+ hours)
-```bash
-# Setup Kaggle API first (https://www.kaggle.com/settings/account)
-# Place kaggle.json in ~/.kaggle/ directory
-python scripts/train_model.py
+#### **Phase 2: Resume Upload & Initial Analysis**
 ```
+┌─────────────────────────────────────────────────────┐
+│ 1. User navigates to "/analyzer" (ProtectedRoute)   │
+│    ↓                                                 │
+│ 2. Sees ResumeUpload component with:                │
+│    • File drag-drop zone                            │
+│    • Supported formats (PDF, DOCX, TXT)             │
+│    • Optional job description textarea              │
+│    ↓                                                 │
+│ 3. User uploads resume file                         │
+│    ↓                                                 │
+│ 4. Frontend sends: POST /api/v1/resume/upload       │
+│    FormData: {                                       │
+│      file: File,                                    │
+│      job_description?: string                       │
+│    }                                                 │
+│ └─────────────────────────────────────────────────────┘
+```
+
+#### **Phase 3: Backend Resume Processing**
+```
+┌─────────────────────────────────────────────────────┐
+│ Backend: /api/v1/resume/upload                      │
+│                                                      │
+│ 1. Validate file type (PDF|DOCX|TXT)               │
+│    ↓                                                │
+│ 2. Save uploaded file to ./uploads/ (MultipartFile) │
+│    ↓                                                │
+│ 3. Parse resume using pdf_parser:                   │
+│    • PDF: pdfplumber → extract all text              │
+│    • DOCX: python-docx → extract paragraphs         │
+│    • TXT: Plain file read                           │
+│    ↓                                                │
+│ 4. Extract resume data:                             │
+│    • Contact info (email, phone, linkedin)          │
+│    • Skills (categorized: lang, frameworks, cloud)  │
+│    • Experience years (regex from text)             │
+│    • Education (degree extraction)                  │
+│    • Resume sections (structure analysis)           │
+│    • Action verbs (leadership keywords)             │
+│    ↓                                                │
+│ 5. IF job_description provided:                     │
+│    a. Call advanced_ats_scorer.comprehensive_analysis()
+│    b. Run ML ensemble scoring (RF + GB + NN)        │
+│    c. Calculate match percentages                   │
+│    d. Generate recommendations                      │
+│    ↓                                                │
+│ 6. Return to frontend: {                            │
+│      filename, resume_text,                         │
+│      [ats_analysis | extracted_info]                │
+│    }                                                │
+│ └─────────────────────────────────────────────────────┘
+```
+
+#### **Phase 4: ATS Score Calculation (ML Pipeline)**
+```
+┌─────────────────────────────────────────────────────┐
+│ AdvancedATSScorer.comprehensive_analysis()          │
+│                                                      │
+│ INPUT: resume_text, job_description                 │
+│                                                      │
+│ STEP 1: Text Preprocessing                          │
+│  ├─ Lowercase & normalize both texts                │
+│  ├─ Remove special characters                       │
+│  └─ Tokenize into sentences                         │
+│     ↓                                                │
+│ STEP 2: Skill Matching (Manual + ML)               │
+│  ├─ Extract skills from resume (against database)   │
+│  ├─ Extract skills from job description             │
+│  ├─ Calculate skill match percentage                │
+│  ├─ Apply skill category weights:                   │
+│  │  • data_science: 1.5x                            │
+│  │  • web_frameworks: 1.2x                          │
+│  │  • other skills: 1.0x                            │
+│  └─ Skill score = (matched/required) × weight       │
+│     ↓                                                │
+│ STEP 3: Semantic Similarity (TF-IDF + Cosine)      │
+│  ├─ Vectorize both texts using TF-IDF              │
+│  ├─ Calculate cosine_similarity between vectors     │
+│  ├─ Normalize to 0-100 scale                        │
+│  └─ Semantic score = similarity × 100               │
+│     ↓                                                │
+│ STEP 4: Format & Structure Analysis                 │
+│  ├─ Check for ATS-friendly sections                │
+│  ├─ Count action verbs (leadership keywords)        │
+│  ├─ Calculate readability score                     │
+│  ├─ Check for proper formatting                     │
+│  └─ Format compliance score                         │
+│     ↓                                                │
+│ STEP 5: ML Model Ensemble Scoring                   │
+│  ├─ Feature extraction (TF-IDF vectors)             │
+│  ├─ Random Forest prediction                        │
+│  ├─ Gradient Boosting prediction                    │
+│  ├─ Neural Network prediction (if available)        │
+│  ├─ Weighted ensemble average (30% RF + 30% GB + 40% NN)  │
+│  └─ ML score = ensemble output × 100                │
+│     ↓                                                │
+│ STEP 6: Final ATS Score Calculation                 │
+│  ├─ Apply weights:                                  │
+│  │  • Skill matching: 40%                           │
+│  │  • Semantic similarity: 30%                       │
+│  │  • ML model score: 20%                           │
+│  │  • Format compliance: 10%                        │
+│  └─ FINAL_SCORE = weighted_sum                      │
+│     ↓                                                │
+│ STEP 7: Gap Analysis & Recommendations              │
+│  ├─ Identify missing required skills                │
+│  ├─ Generate improvement suggestions                │
+│  ├─ AI-powered advice (OpenAI if available)         │
+│  └─ Priority-based recommendations                  │
+│     ↓                                                │
+│ OUTPUT: {                                            │
+│   overall_score: 0-100,                             │
+│   skill_score: 0-100,                               │
+│   semantic_similarity: 0-100,                       │
+│   format_compliance: 0-100,                         │
+│   ml_score: 0-100,                                  │
+│   matched_skills: [...],                           │
+│   missing_skills: [...],                           │
+│   recommendations: [...],                          │
+│   improvement_tips: [...]                          │
+│ }                                                    │
+│ └─────────────────────────────────────────────────────┘
+```
+
+#### **Phase 5: Frontend Display ATS Results**
+```
+┌─────────────────────────────────────────────────────┐
+│ AdvancedResumeAnalysis Component displays:          │
+│                                                      │
+│ ┌─────────────────────────────────────────────┐    │
+│ │ Overall ATS Score: 78/100 [Circular Gauge] │    │
+│ │ ✅ Good Match - You're a strong candidate! │    │
+│ └─────────────────────────────────────────────┘    │
+│                                                      │
+│ ┌─────────────────────────────────────────────┐    │
+│ │ Score Breakdown:                            │    │
+│ │ • Skill Match: 85/100 [Progress Bar]        │    │
+│ │ • Semantic Match: 72/100                    │    │
+│ │ • ML Model Score: 75/100                    │    │
+│ │ • Format Compliance: 90/100                 │    │
+│ └─────────────────────────────────────────────┘    │
+│                                                      │
+│ ┌─────────────────────────────────────────────┐    │
+│ │ Matched Skills (28 found):                  │    │
+│ │ [Python badge] [React badge] [AWS badge]   │    │
+│ │ [Docker badge] [PostgreSQL badge] ...       │    │
+│ └─────────────────────────────────────────────┘    │
+│                                                      │
+│ ┌─────────────────────────────────────────────┐    │
+│ │ Missing Skills (12 required):               │    │
+│ │ ⚠️ Kubernetes, Azure, Go, GraphQL           │    │
+│ └─────────────────────────────────────────────┘    │
+│                                                      │
+│ ┌─────────────────────────────────────────────┐    │
+│ │ Top Recommendations:                        │    │
+│ │ 1. Add Azure knowledge to your resume       │    │
+│ │ 2. Highlight your ML/AI experience more     │    │
+│ │ 3. Include specific project metrics         │    │
+│ │ 4. Emphasize leadership achievements        │    │
+│ └─────────────────────────────────────────────┘    │
+│ └─────────────────────────────────────────────────────┘
+```
+
+#### **Phase 6: Job Recommendations**
+```
+┌─────────────────────────────────────────────────────┐
+│ User navigates to "/jobs" page                      │
+│                                                      │
+│ Option A: Get Recommendations (Auto from resume)    │
+│  1. Frontend: POST /api/v1/jobs/recommend            │
+│     {resume_text, top_k: 5, location?: string}      │
+│     ↓                                                │
+│  2. Backend extracts skills from resume             │
+│     ↓                                                │
+│  3. Job Service searches using extracted skills:    │
+│     • Query: "Python React AWS Engineer"            │
+│     • Simultaneously search: Remotive + Adzuna       │
+│     ↓                                                │
+│  4. Deduplicate results (same company, similar job) │
+│     ↓                                                │
+│  5. Return top 5 matching jobs                       │
+│                                                      │
+│ Option B: Manual Job Search                         │
+│  1. Frontend: GET /api/v1/jobs/search?keyword=...   │
+│     {keyword, location, job_type, source}           │
+│     ↓                                                │
+│  2. Query specified job APIs:                        │
+│     • Remotive (free, remote jobs)                   │
+│     • Adzuna (if API keys configured)                │
+│     • Jooble (if API keys configured)                │
+│     ↓                                                │
+│  3. Return aggregated results                        │
+│ └─────────────────────────────────────────────────────┘
+```
+
+#### **Phase 7: Job Matching & Match Score**
+```
+┌─────────────────────────────────────────────────────┐
+│ User clicks "Match Resume to This Job"              │
+│                                                      │
+│ Frontend: POST /api/v1/jobs/match-resume-to-job    │
+│ {resume_text, job_description}                      │
+│     ↓                                                │
+│ Backend calls advanced_ats_scorer again             │
+│     ↓                                                │
+│ Returns detailed match analysis:                    │
+│ • Match percentage                                  │
+│ • Matched skills                                    │
+│ • Missing skills                                    │
+│ • Specific recommendations for THIS job             │
+│ └─────────────────────────────────────────────────────┘
+```
+
+#### **Phase 8: History & Persistence**
+```
+┌─────────────────────────────────────────────────────┐
+│ User navigates to "/history" page                   │
+│                                                      │
+│ Backend: GET /api/v1/history/                       │
+│  1. Query MongoDB: all resumes for user_id          │
+│  2. Query MongoDB: all analysis records for user    │
+│  3. Return list with:                               │
+│     • Resume filename, upload date                  │
+│     • Associated job descriptions analyzed          │
+│     • ATS scores from each analysis                 │
+│     • Creation date, last accessed                  │
+│     ↓                                                │
+│ Frontend displays:                                  │
+│  • Timeline of submissions                          │
+│  • Score trends                                     │
+│  • Ability to re-open and compare analyses          │
+│  • Delete/archive old submissions                   │
+│ └─────────────────────────────────────────────────────┘
+```
+
+---
+
+## ✨ Key Features
+
+### 1. **Resume Processing**
+- 📄 Support for PDF, DOCX, and TXT formats
+- 🎯 Intelligent text extraction with OCR-ready structure
+- 📊 Automatic categorization of resume sections
+- 🔍 Structured data extraction (contact, experience, education)
+
+### 2. **ATS Scoring Engine**
+- 🤖 **Ensemble ML Models**: Random Forest + Gradient Boosting + Neural Networks
+- 🎓 **Skill Matching**: Database of 80+ skills across 7 categories
+- 📈 **Semantic Analysis**: TF-IDF vectorization + cosine similarity
+- ✍️ **Format Validation**: ATS-friendly document structure checking
+- 🏆 **Multi-factor Scoring**: Weighted combination of 4 scoring algorithms
+
+### 3. **Job Recommendations**
+- 🔗 **Multi-API Integration**: Remotive + Adzuna + Jooble
+- 🎯 **Smart Matching**: Skills-based job suggestions
+- 🌍 **Location-based Search**: Remote and location-specific options
+- 🚫 **Deduplication**: Eliminate duplicate postings from multiple boards
+- 💼 **Rich Job Data**: Title, company, description, salary, posting date
+
+### 4. **Skill Analysis**
+- 🏷️ **Skill Categorization**: 7 categories (Programming, Frameworks, Cloud, etc.)
+- 📊 **Gap Analysis**: Identify missing required skills
+- 💡 **Recommendations**: Personalized improvement suggestions
+- 🔑 **Action Verbs**: Leadership keyword extraction
+
+### 5. **Authentication & Authorization**
+- 🔐 **OAuth Integration**: Google & GitHub sign-up/login
+- 🎫 **JWT Tokens**: Access token + refresh token system
+- 🛡️ **Password Security**: bcrypt hashing + passlib validation
+- 👤 **User Profiles**: Persistent user data in MongoDB
+
+### 6. **AI-Powered Insights**
+- 🧠 **OpenAI Integration**: GPT-powered recommendations (optional)
+- 💬 **Natural Language Analysis**: Context-aware improvement tips
+- 🎯 **Smart Suggestions**: Prioritized remediations based on impact
+
+### 7. **History & Tracking**
+- 📜 **Save Analyses**: All resume submissions saved with timestamps
+- 📊 **Score Trends**: Track improvements over time
+- 🔄 **Comparison**: View and compare multiple submissions
+- 🗂️ **Organized Management**: Archive or delete old submissions
 
 ---
 
 ## 💻 Tech Stack
 
-### Backend
-- **Framework**: FastAPI (Python)
-- **Server**: Uvicorn ASGI
-- **Database**: MongoDB (optional)
-- **ML Libraries**: scikit-learn, PyTorch, transformers
-- **NLP**: spaCy, NLTK
-- **File Processing**: PyPDF2, pdfplumber, python-docx
-- **APIs**: aiohttp, requests
-- **Auth**: JWT, bcrypt, passlib
+### Frontend Technologies
+```
+Framework              React 18.2.0
+Build Tool            react-scripts 5.0.1
+Styling               Tailwind CSS 3.3.6 + PostCSS
+State Management      Zustand 4.4.5
+HTTP Client           Axios 1.6.2
+Routing               React Router v6
+Charts                Recharts 2.10.0
+Icons                 React Icons 4.12.0
+PDF Viewing           react-pdf 10.3.0
+HTML Sanitization     DOMPurify 3.3.1
+UI Components         Lucide React 0.563.0
+```
 
-### Frontend
-- **Framework**: React 18
-- **Styling**: Tailwind CSS
-- **State Management**: Zustand
-- **HTTP Client**: Axios
-- **Routing**: React Router v6
-- **Charts**: Recharts
-- **Icons**: React Icons
-- **Build**: Vite/react-scripts
+### Backend Technologies
+```
+Framework             FastAPI 0.104.1
+Server               Uvicorn (ASGI) 0.24.0
+Data Validation      Pydantic 2.5.0
+File Upload          python-multipart 0.0.6
+Environment Config   python-dotenv 1.0.0
 
-### ML/AI
-- **Models**: Random Forest, Gradient Boosting, Neural Networks
-- **Vectorization**: TF-IDF
-- **Similarity**: Cosine similarity
-- **Training Data**: Kaggle datasets
-- **Deep Learning**: PyTorch
+ML/Data Science:
+  Machine Learning   scikit-learn 1.3.2
+  Deep Learning      PyTorch 2.5.1
+  Transformers       transformers 4.35.2
+  Sentence Embedding sentence-transformers 2.2.2
+  NLP                NLTK 3.8.1
+  Numerical          NumPy 1.26.2, Pandas 2.1.3
 
-### Deployment
-- **Containerization**: Docker
-- **Orchestration**: Docker Compose
-- **Hosting**: Render.com (recommended)
+PDF Processing:
+  PDF Parsing        PyPDF2 3.0.1, pdfplumber 0.10.3
+  DOCX Processing    python-docx 0.8.11
+
+External APIs:
+  Async HTTP         aiohttp 3.9.1, httpx 0.25.1
+  REST Requests      requests 2.31.0
+  OpenAI             openai >= 1.0.0
+
+Database:
+  MongoDB Driver     motor 3.3.2, pymongo 4.6.1
+
+Security & Auth:
+  JWT Tokens         python-jose 3.3.0
+  Password Hashing   passlib 1.7.4, bcrypt 4.1.1
+  Image Processing   Pillow 10.1.0
+
+Logging:
+  JSON Logging       python-json-logger 2.0.7
+```
+
+### ML Models & Algorithms
+```
+Scoring Algorithms    TF-IDF Vectorization + Cosine Similarity
+ML Models            Random Forest + Gradient Boosting
+Deep Learning        PyTorch Neural Networks (4-layer feedforward)
+Word Embeddings      Sentence Transformers
+Text Processing      spaCy, NLTK
+```
+
+### DevOps & Deployment
+```
+Containerization     Docker
+Orchestration        Docker Compose
+Hosting (Optional)   Render.com, Heroku, AWS, Azure
+```
 
 ---
 
 ## 📋 System Requirements
+
+### Minimum Requirements:
+- **CPU**: Dual-core processor (4-core recommended for ML models)
+- **RAM**: 4GB minimum (8GB+ recommended)
+- **Storage**: 2GB free space (for models and uploads)
+- **Python**: 3.9 or higher
+- **Node.js**: 16.x or higher
+- **Internet**: Required for external APIs
+
+### Recommended (for optimal performance):
+- **CPU**: 4+ cores (GPU recommended for neural networks)
+- **RAM**: 16GB+
+- **Python**: 3.11+
+- **Node.js**: 18+
+- **CUDA**: 11.8+ (for GPU acceleration)
+
+---
+
+## 🚀 Installation & Setup
+
+### Prerequisites
+```bash
+# Required installations:
+# 1. Python 3.9+
+python --version
+
+# 2. Node.js 16+
+node --version
+npm --version
+
+# 3. Git
+git --version
+```
+
+### Option 1: Docker Compose (Recommended - Fastest)
+
+```bash
+# Navigate to project directory
+cd c:\Users\moham\OneDrive\Desktop\intellidiots\intellidiots
+
+# Build and start services
+docker-compose up --build
+
+# Access URLs:
+# Frontend:  http://localhost:3000
+# Backend:   http://localhost:8000
+# API Docs:  http://localhost:8000/docs
+# ReDoc:     http://localhost:8000/redoc
+```
+
+**Troubleshooting Docker:**
+```bash
+# View logs
+docker-compose logs -f backend
+docker-compose logs -f frontend
+
+# Stop services
+docker-compose down
+
+# Clean rebuild
+docker-compose down -v
+docker-compose up --build
+```
+
+### Option 2: Local Development Setup
+
+#### Backend Setup
+
+```powershell
+# Terminal 1: Backend Setup
+cd backend
+
+# Create virtual environment
+python -m venv venv
+
+# Activate virtual environment (Windows)
+venv\Scripts\activate
+# OR on macOS/Linux:
+# source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Download NLP models (spaCy)
+python -m spacy download en_core_web_sm
+
+# Create .env file (copy from .env.example)
+# Add your API keys here
+
+# Run backend server
+cd ..
+uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+
+# Server runs at: http://localhost:8000
+# API Docs at: http://localhost:8000/docs
+```
+
+#### Frontend Setup
+
+```powershell
+# Terminal 2: Frontend Setup
+cd frontend
+
+# Install dependencies
+npm install
+
+# Create .env file (if n
+3eeded)
+# REACT_APP_API_URL=http://localhost:8000/api/v1
+
+# Start development server
+npm start
+
+# Frontend runs at: http://localhost:3000
+# Auto-reload on code changes
+```
+
+#### Database Setup (Optional - MongoDB)
+
+```bash
+# Using Docker
+docker run -d -p 27017:27017 --name mongodb mongo:latest
+
+# OR install MongoDB locally and start service
+# Windows: mongod.exe
+# macOS: brew services start mongodb-community
+# Linux: sudo systemctl start mongod
+
+# Verify MongoDB connection
+python -c "from motor.motor_asyncio import AsyncClient; print('✓ MongoDB ready')"
+```
+
+### Option 3: Train Custom ML Models
+
+```bash
+# Setup Kaggle API
+# 1. Get API token from https://www.kaggle.com/settings/account
+# 2. Place kaggle.json in ~/.kaggle/ directory
+
+# Set environment variables for Kaggle (Windows PowerShell)
+$env:KAGGLE_USERNAME = "your-kaggle-username"
+$env:KAGGLE_KEY = "your-api-key"
+
+# Navigate to project
+cd c:\Users\moham\OneDrive\Desktop\intellidiots\intellidiots
+
+# Train models (this will take 30+ minutes)
+python scripts/train_model.py
+
+# Models saved to: ml_models/
+#  ├── rf_model.pkl           (Random Forest)
+#  ├── gb_model.pkl           (Gradient Boosting)
+#  ├── nn_model.pth           (Neural Network)
+#  ├── vectorizer.pkl         (TF-IDF Vectorizer)
+#  └── scaler.pkl             (Feature Scaler)
+```
+
+---
+
+## 🔌 API Endpoints Documentation
+
+### Base URL
+```
+Development: http://localhost:8000/api/v1
+Production: https://your-domain.com/api/v1
+```
+
+### Authentication Endpoints
+
+#### Sign Up (Email/Password)
+```http
+POST /auth/signup
+Content-Type: application/json
+
+Request:
+{
+  "email": "user@example.com",
+  "password": "securePassword123",
+  "full_name": "John Doe"
+}
+
+Response (200 OK):
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIs...",
+  "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
+  "token_type": "bearer",
+  "user": {
+    "id": "user_123",
+    "email": "user@example.com",
+    "full_name": "John Doe",
+    "is_verified": false
+  }
+}
+```
+
+#### Login
+```http
+POST /auth/login
+Content-Type: application/json
+
+Request:
+{
+  "email": "user@example.com",
+  "password": "securePassword123"
+}
+
+Response (200 OK):
+{
+  "access_token": "...",
+  "refresh_token": "...",
+  "token_type": "bearer",
+  "user": {...}
+}
+```
+
+#### Google OAuth Login
+```http
+GET /auth/google/login
+
+# Redirects to Google OAuth consent screen
+# After approval, redirects back with authorization code
+# Frontend handles callback at: /auth/callback/google
+```
+
+#### GitHub OAuth Login
+```http
+GET /auth/github/login
+
+# Redirects to GitHub OAuth authorization
+# After approval, redirects back with code
+# Frontend handles callback at: /auth/callback/github
+```
+
+#### Refresh Token
+```http
+POST /auth/refresh-token
+Content-Type: application/json
+
+Request:
+{
+  "refresh_token": "eyJhbGciOiJIUzI1NiIs..."
+}
+
+Response (200 OK):
+{
+  "access_token": "new-access-token...",
+  "token_type": "bearer"
+}
+```
+
+---
+
+### Resume Upload & Analysis Endpoints
+
+#### Upload Resume
+```http
+POST /resume/upload
+Content-Type: multipart/form-data
+Authorization: Bearer {access_token}
+
+Form Data:
+  - file: <PDF|DOCX|TXT file>
+  - job_description: (optional) "Senior Software Engineer, 5+ years..."
+
+Response (200 OK):
+{
+  "filename": "my_resume.pdf",
+  "resume_text": "John Doe\nSoftware Engineer...",
+  "ats_analysis": {
+    "overall_score": 78,
+    "skill_score": 85,
+    "semantic_similarity": 72,
+    "format_compliance": 90,
+    "ml_score": 75,
+    "matched_skills": ["Python", "React", "Docker", "PostgreSQL"],
+    "missing_skills": ["Kubernetes", "Azure"],
+    "recommendations": [
+      "Add Kubernetes experience",
+      "Highlight cloud architecture projects"
+    ]
+  }
+  # OR
+  "extracted_info": {
+    "skills": [...],
+    "skills_by_category": {...},
+    "experience_years": 8,
+    "education": ["BS Computer Science"],
+    "contact_info": {...},
+    "sections": [...],
+    "action_verbs": [...]
+  }
+}
+```
+
+#### Score Resume Against Job
+```http
+POST /resume/score
+Content-Type: application/json
+Authorization: Bearer {access_token}
+
+Request:
+{
+  "resume_text": "John Doe\nSoftware Engineer...",
+  "job_description": "We seek a Senior Python Developer with 5+ years experience..."
+}
+
+Response (200 OK):
+{
+  "overall_score": 82,
+  "skill_score": 88,
+  "semantic_similarity": 78,
+  "format_compliance": 92,
+  "ml_score": 79,
+  "matched_skills": [...],
+  "missing_skills": [...],
+  "recommendations": [...],
+  "improvement_tips": [...]
+}
+```
+
+#### Extract Skills
+```http
+POST /resume/extract-skills
+Content-Type: application/json
+Authorization: Bearer {access_token}
+
+Request:
+{
+  "resume_text": "John Doe\nPython Expert with 10 years...\nDocker, Kubernetes, AWS..."
+}
+
+Response (200 OK):
+{
+  "skills": ["Python", "Docker", "Kubernetes", "AWS", "React"],
+  "skills_by_category": {
+    "programming_languages": ["Python"],
+    "cloud_devops": ["Docker", "Kubernetes", "AWS"],
+    "frameworks_libraries": ["React"]
+  },
+  "experience_years": 10,
+  "education": ["BS Computer Science"],
+  "contact_info": {...},
+  "sections": ["Experience", "Education", "Skills"],
+  "action_verbs": ["Developed", "Implemented", "Architected"]
+}
+```
+
+---
+
+### Job Endpoints
+
+#### Search Jobs
+```http
+GET /jobs/search?keyword=Python&location=remote&source=remotive
+Authorization: Bearer {access_token}
+
+Query Parameters:
+  - keyword (required):  "Python Developer", "React Engineer"
+  - location (optional): "remote", "new york", "san francisco"
+  - job_type (optional): "full-time", "contract", "part-time"
+  - source (optional):   "remotive", "adzuna", "jooble" (default: all)
+
+Response (200 OK):
+{
+  "keyword": "Python",
+  "location": "remote",
+  "total_jobs": 125,
+  "jobs": [
+    {
+      "id": "remotive_12345",
+      "title": "Senior Python Developer",
+      "company": "TechCorp",
+      "location": "Remote",
+      "description": "We're looking for...",
+      "url": "https://remotive.com/remote-jobs/...",
+      "type": "Full-time",
+      "posted_date": "2024-04-05",
+      "source": "remotive",
+      "salary": "$120,000 - $150,000"
+    },
+    ...
+  ]
+}
+```
+
+#### Get Job Recommendations
+```http
+POST /jobs/recommend
+Content-Type: application/json
+Authorization: Bearer {access_token}
+
+Request:
+{
+  "resume_text": "John Doe\nPython Developer...",
+  "top_k": 5,
+  "location": "remote"
+}
+
+Response (200 OK):
+{
+  "extracted_skills": ["Python", "React", "Docker", "AWS"],
+  "total_recommendations": 5,
+  "jobs": [
+    {
+      "id": "...",
+      "title": "Senior Python Engineer",
+      "company": "StartupXYZ",
+      ...
+    },
+    ...
+  ]
+}
+```
+
+#### Match Resume to Job
+```http
+POST /jobs/match-resume-to-job
+Content-Type: application/json
+Authorization: Bearer {access_token}
+
+Request:
+{
+  "resume_text": "John Doe\nPython Developer...",
+  "job_description": "Senior Python Developer needed..."
+}
+
+Response (200 OK):
+{
+  "match_score": 82,
+  "matched_skills": [...],
+  "missing_skills": [...],
+  "job_evaluation": {
+    "skill_fit": "Excellent",
+    "experience_fit": "Good",
+    "format_fit": "Very Good"
+  },
+  "recommendations": [...]
+}
+```
+
+---
+
+### History Endpoints
+
+#### Get User History
+```http
+GET /history/
+Authorization: Bearer {access_token}
+
+Response (200 OK):
+{
+  "total_submissions": 12,
+  "submissions": [
+    {
+      "id": "history_123",
+      "resume_filename": "resume_v3.pdf",
+      "upload_date": "2024-04-05T10:30:00Z",
+      "analyses": [
+        {
+          "job_title": "Senior Python Developer",
+          "score": 82,
+          "date": "2024-04-05T10:35:00Z"
+        }
+      ]
+    },
+    ...
+  ]
+}
+```
+
+#### Delete History Entry
+```http
+DELETE /history/{history_id}
+Authorization: Bearer {access_token}
+
+Response (200 OK):
+{
+  "message": "History entry deleted successfully"
+}
+```
+
+---
+
+### Model Management Endpoints
+
+#### Get Model Status
+```http
+GET /models/status
+Authorization: Bearer {access_token}
+
+Response (200 OK):
+{
+  "models_loaded": {
+    "random_forest": true,
+    "gradient_boosting": true,
+    "neural_network": false,
+    "vectorizer": true
+  },
+  "ml_pipeline_ready": true,
+  "gpu_available": false
+}
+```
+
+#### Force Model Reload
+```http
+POST /models/reload
+Authorization: Bearer {access_token}
+
+Response (200 OK):
+{
+  "message": "Models reloaded successfully",
+  "status": "ready"
+}
+```
+
+---
+
+### Health & System Endpoints
+
+#### Health Check
+```http
+GET /health
+
+Response (200 OK):
+{
+  "status": "healthy",
+  "timestamp": "2024-04-05T10:30:00Z"
+}
+```
+
+#### API Root
+```http
+GET /
+
+Response (200 OK):
+{
+  "message": "Resume ATS Scorer & Job Recommendation System",
+  "version": "1.0.0",
+  "endpoints": {
+    "resume": "/api/v1/resume",
+    "jobs": "/api/v1/jobs",
+    "models": "/api/v1/models"
+  }
+}
+```
+
+---
+
+### API Documentation
+- **Interactive Docs (Swagger UI)**: http://localhost:8000/docs
+- **Alternative Docs (ReDoc)**: http://localhost:8000/redoc
+- **OpenAPI JSON**: http://localhost:8000/openapi.json
+
+---
+
+## 🎨 Frontend Components Structure
+
+### Page Components (`/frontend/src/pages/`)
+```
+Home.jsx                  - Landing page with features, testimonials, CTA
+Login.jsx                 - Email/password + OAuth login form
+Signup.jsx                - User registration page
+Analyzer.jsx              - Resume upload & ATS analysis display
+Jobs.jsx                  - Job search & recommendations interface
+History.jsx               - View past submissions & analyses
+AuthCallback.jsx          - OAuth provider callback handler
+```
+
+### UI Components (`/frontend/src/components/`)
+```
+Navigation.jsx            - Top navigation bar with logo & menu
+ProtectedRoute.jsx        - Route guard for authenticated pages
+ResumeUpload.jsx          - File upload widget with drag-drop
+AdvancedResumeAnalysis.jsx - Display ATS scores & analysis results
+ResumeAnalysis.jsx        - Resume structure visualization
+Common.jsx                - Reusable utility components
+Footer.jsx                - Footer with links & info
+JobRecommendations.jsx    - Job recommendations list & filtering
+SkillsDemand.jsx          - Market skills trends & demand charts
+```
+
+### Home Sub-components (`/frontend/src/components/home/`)
+```
+Hero.jsx                  - Hero section with main CTA
+Features.jsx              - Key features showcase
+HowItWorks.jsx            - Step-by-step workflow explanation
+HowItHelps.jsx            - Benefits for users
+Testimonials.jsx          - User testimonials
+CTA.jsx                   - Final call-to-action section
+```
+
+### State Management (`/frontend/src/store/`)
+```
+authStore.js              - Authentication state (Zustand)
+  ├─ User data
+  ├─ Tokens (access, refresh)
+  ├─ Auth methods (signup, login, logout)
+  └─ OAuth handlers
+
+index.js                  - Main store export (if additional stores)
+```
+
+### API Client (`/frontend/src/api/`)
+```
+client.js                 - Axios instance
+  ├─ Base URL configuration
+  ├─ Request/Response interceptors
+  ├─ Auth token injection
+  └─ Error handling
+```
+
+---
+
+## 🧠 ML/AI Pipeline Deep Dive
+
+### Skill Database Structure
+```python
+SKILLS_DATABASE = {
+    "programming_languages": {
+        "python", "java", "javascript", "typescript", "c++", ...
+    },
+    "frameworks_libraries": {
+        "react", "angular", "Vue", "django", "fastapi", ...
+    },
+    "cloud_devops": {
+        "aws", "azure", "gcp", "docker", "kubernetes", ...
+    },
+    "databases": {
+        "postgresql", "mongodb", "redis", "elasticsearch", ...
+    },
+    "data_science_ai": {
+        "machine learning", "tensorflow", "pytorch", ...
+    },
+    "soft_skills": {
+        "leadership", "communication", "teamwork", ...
+    },
+    "tools_platforms": {
+        "git", "github", "jira", "figma", ...
+    }
+}
+```
+
+### ATS Scoring Algorithm Flow
+```
+┌─────────────────────────────────────┐
+│ Input: Resume + Job Description     │
+└──────────────┬──────────────────────┘
+               │
+        ┌──────┴───────┬──────────────────────┬─────────────────┐
+        │              │                      │                 │
+        ▼              ▼                      ▼                 ▼
+   Skill Match    Semantic Sim          Format Check      ML Models
+   ┌────────┐   ┌──────────┐          ┌─────────┐      ┌──────────┐
+   │Database│   │TF-IDF    │          │Structure│      │RF | GB   │
+   │Match   │   │Vectorize │          │Check    │      │+ NN      │
+   │        │   │Cosine    │          │         │      │          │
+   │Score   │   │Similarity│          │Format   │      │Ensemble  │
+   │85%     │   │72%       │          │Score    │      │75%       │
+   │        │   │          │          │90%      │      │          │
+   └────────┘   └──────────┘          └─────────┘      └──────────┘
+        │              │                      │                 │
+        └──────────────┴──────────────────────┴─────────────────┘
+                       │
+                       │ Weighted Combination
+                       │ 40% + 30% + 10% + 20%
+                       │
+                   ┌───▼────┐
+                   │ Final  │
+                   │ Score: │
+                   │ 78/100 │
+                   └────────┘
+```
+
+### Neural Network Architecture
+```
+Input Layer (500 features)
+    │
+    ├─► Dense(256 neurons) → ReLU → Dropout(0.3)
+    │
+    ├─► Dense(128 neurons) → ReLU → Dropout(0.2)
+    │
+    ├─► Dense(64 neurons) → ReLU
+    │
+    └─► Dense(1 neuron) → Sigmoid
+        │
+        └─► Output: Score (0-1, scaled to 0-100)
+```
+
+### Model Training Pipeline (if you run train_model.py)
+```
+1. Data Loading
+   ├─ Download Kaggle resume + job matching datasets
+   ├─ Parse CSV files
+   └─ Split: 70% train, 15% val, 15% test
+
+2. Feature Engineering
+   ├─ Concatenate resume + job description
+   ├─ TF-IDF vectorization (500 features)
+   ├─ Create binary labels (match: 1, no-match: 0)
+   └─ Normalize features using StandardScaler
+
+3. Model Training
+   ├─ Random Forest: 100 trees, max_depth=15
+   ├─ Gradient Boosting: 100 estimators, lr=0.1
+   └─ Neural Network: 4 layers with dropout
+
+4. Validation & Evaluation
+   ├─ Cross-validation (5-fold)
+   ├─ Metrics: Accuracy, Precision, Recall, F1
+   └─ Generate performance plots
+
+5. Model Serialization
+   ├─ Save as pkl files (RF, GB, scaler)
+   ├─ Save as pth file (NN)
+   └─ Save vectorizer for later use
+```
+
+---
+
+## 💾 Database Schema
+
+### MongoDB Collections
+
+#### Users Collection
+```javascript
+{
+  _id: ObjectId,
+  email: "user@example.com",
+  full_name: "John Doe",
+  password_hash: "bcrypt_hash_here",
+  avatar_url: "https://...",
+  oauth_provider: "google" | "github" | null,
+  oauth_id: "sub_123456",
+  is_verified: false,
+  created_at: ISODate("2024-04-05T10:00:00Z"),
+  last_login: ISODate("2024-04-05T14:30:00Z"),
+  preferences: {
+    theme: "dark",
+    notifications_enabled: true
+  }
+}
+```
+
+#### Resumes Collection
+```javascript
+{
+  _id: ObjectId,
+  user_id: ObjectId,
+  filename: "my_resume.pdf",
+  original_filename: "John_Doe_Resume.pdf",
+  file_path: "/uploads/my_resume.pdf",
+  file_size: 145000,
+  file_type: "pdf",
+  resume_text: "John Doe\nSenior Software Engineer...",
+  extracted_data: {
+    name: "John Doe",
+    email: "john@example.com",
+    phone: "+1-555-123-4567",
+    skills: ["Python", "React", "Docker"],
+    experience_years: 8,
+    education: ["BS Computer Science"],
+    sections: ["Experience", "Education", "Skills"]
+  },
+  uploaded_at: ISODate("2024-04-05T10:00:00Z"),
+  updated_at: ISODate("2024-04-05T14:30:00Z")
+}
+```
+
+#### ATS Analyses Collection
+```javascript
+{
+  _id: ObjectId,
+  user_id: ObjectId,
+  resume_id: ObjectId,
+  job_description: "Senior Python Developer needed...",
+  job_title: "Senior Python Developer",
+  company_name: "TechCorp",
+  analysis_date: ISODate("2024-04-05T10:30:00Z"),
+  scores: {
+    overall_score: 78,
+    skill_score: 85,
+    semantic_similarity: 72,
+    format_compliance: 90,
+    ml_score: 75
+  },
+  skill_analysis: {
+    matched_skills: ["Python", "React", "Docker"],
+    missing_skills: ["Kubernetes", "GraphQL"],
+    skill_count: {
+      matched: 28,
+      required: 40
+    }
+  },
+  recommendations: [
+    "Add Kubernetes experience to resume",
+    "Highlight cloud architecture projects"
+  ],
+  ai_insights: "Based on your resume...",
+  matching_jobs: [
+    {
+      job_id: "remotive_12345",
+      title: "Senior Python Engineer",
+      match_score: 82
+    }
+  ]
+}
+```
+
+#### Job Listings Collection
+```javascript
+{
+  _id: ObjectId,
+  source: "remotive" | "adzuna" | "jooble",
+  external_id: "remotive_12345",
+  title: "Senior Python Developer",
+  company: "TechCorp",
+  location: "Remote",
+  country: "US",
+  job_type: "Full-time",
+  seniority: "Senior",
+  description: "We're looking for a talented Python developer...",
+  required_skills: ["Python", "FastAPI", "Docker"],
+  salary: {
+    min: 120000,
+    max: 150000,
+    currency: "USD"
+  },
+  url: "https://remotive.com/remote-jobs/...",
+  posted_date: ISODate("2024-04-05T09:00:00Z"),
+  expires_date: ISODate("2024-05-05T09:00:00Z"),
+  crawled_at: ISODate("2024-04-05T10:00:00Z")
+}
+```
+
+#### Job History Collection
+```javascript
+{
+  _id: ObjectId,
+  user_id: ObjectId,
+  action: "view" | "apply" | "save" | "delete",
+  job_id: ObjectId,
+  resume_id: ObjectId,
+  match_score: 0-100,
+  action_date: ISODate("2024-04-05T14:30:00Z"),
+  notes: "Applied for this position"
+}
+```
+
+#### Audit Log Collection (Optional)
+```javascript
+{
+  _id: ObjectId,
+  user_id: ObjectId,
+  action: "resume_upload" | "ats_analysis" | "login" | "logout",
+  details: {...},
+  ip_address: "192.168.1.100",
+  user_agent: "Mozilla/5.0...",
+  timestamp: ISODate("2024-04-05T14:30:00Z")
+}
+```
+
+---
+
+## ⚙️ Configuration
+
+### Environment Variables (.env)
+
+```bash
+# Backend Configuration
+PYTHONUNBUFFERED=1
+
+# API Configuration
+API_TITLE="Career Pilot - Resume ATS Scorer"
+API_VERSION="1.0.0"
+
+# Security
+SECRET_KEY="your-super-secret-key-here"
+ACCESS_TOKEN_EXPIRE_MINUTES=15
+REFRESH_TOKEN_EXPIRE_DAYS=7
+
+# CORS
+CORS_ORIGINS=["http://localhost:3000","http://localhost:3001","http://localhost:8000"]
+
+# Database - MongoDB
+MONGODB_URL="mongodb://localhost:27017"
+MONGODB_DB_NAME="career_pilot"
+
+# External OAuth Providers
+GOOGLE_CLIENT_ID="your-google-client-id.apps.googleusercontent.com"
+GOOGLE_CLIENT_SECRET="your-google-client-secret"
+GITHUB_CLIENT_ID="your-github-client-id"
+GITHUB_CLIENT_SECRET="your-github-client-secret"
+FRONTEND_URL="http://localhost:3000"
+
+# External APIs for Job Search
+ADZUNA_APP_ID="your-adzuna-app-id"
+ADZUNA_APP_KEY="your-adzuna-api-key"
+JOOBLE_API_KEY="your-jooble-api-key"
+
+# OpenAI (for AI-powered recommendations)
+OPENAI_API_KEY="sk-your-openai-api-key"
+
+# File Upload
+MAX_FILE_SIZE=10485760  # 10MB in bytes
+ALLOWED_EXTENSIONS=["pdf", "txt", "docx"]
+UPLOAD_FOLDER="./uploads"
+
+# ML Models
+MODEL_FOLDER="./ml_models"
+
+# Kaggle (for training models)
+KAGGLE_USERNAME="your-kaggle-username"
+KAGGLE_KEY="your-kaggle-api-key"
+```
+
+### Frontend Configuration (.env)
+
+```bash
+# API Configuration
+REACT_APP_API_URL=http://localhost:8000/api/v1
+REACT_APP_ENV=development
+
+# Optional: Analytics, etc.
+REACT_APP_VERSION=$npm_package_version
+```
+
+---
+
+## 🌐 Deployment
+
+### Deploy to Render.com (Recommended)
+
+1. **Create Render Account**: https://dashboard.render.com
+
+2. **Connect Repository**
+   - Push code to GitHub
+   - Connect your GitHub account to Render
+
+3. **Deploy Backend (Web Service)**
+   ```
+   - Name: career-pilot-backend
+   - Runtime: Python 3.11
+   - Build Command: pip install -r requirements.txt
+   - Start Command: uvicorn backend.main:app --host 0.0.0.0 --port 8000
+   - Environment Variables: (Add all .env variables)
+   ```
+
+4. **Deploy Frontend (Static Site)**
+   ```
+   - Name: career-pilot-frontend
+   - Build Command: npm run build
+   - Publish Directory: frontend/build
+   - Environment Variables:
+     - REACT_APP_API_URL=https://your-backend-url/api/v1
+   ```
+
+5. **Configure MongoDB Atlas** (for production database)
+   - Go to https://www.mongodb.com/cloud/atlas
+   - Create cluster
+   - Update `MONGODB_URL` in Render env vars
+
+### Deploy to Heroku
+
+```bash
+# Login to Heroku
+heroku login
+
+# Create app
+heroku create career-pilot-backend
+
+# Set environment variables
+heroku config:set OPENAI_API_KEY=sk-...
+heroku config:set GOOGLE_CLIENT_ID=...
+
+# Deploy
+git push heroku main
+
+# View logs
+heroku logs --tail
+```
+
+### Deploy to AWS (ECS + Fargate)
+
+```bash
+# Create ECR repository
+aws ecr create-repository --repository-name career-pilot
+
+# Build and push Docker image
+docker build -t career-pilot .
+docker tag career-pilot:latest {aws_account}.dkr.ecr.us-east-1.amazonaws.com/career-pilot:latest
+docker push {aws_account}.dkr.ecr.us-east-1.amazonaws.com/career-pilot:latest
+
+# Create ECS service (use AWS Console or CLI)
+aws ecs create-service --cluster career-pilot --service-name backend --task-definition career-pilot:1 --desired-count 1
+```
+
+---
+
+## 🤝 Contributing
+
+### Setup Development Environment
+```bash
+# Clone repository
+git clone https://github.com/yourusername/career-pilot.git
+cd career-pilot
+
+# Create feature branch
+git checkout -b feature/amazing-feature
+
+# Make changes, commit
+git commit -m "Add amazing feature"
+
+# Push & create pull request
+git push origin feature/amazing-feature
+```
+
+### Code Standards
+- **Python**: Follow PEP-8, use type hints
+- **JavaScript**: Use ES6+, follow Airbnb style guide
+- **Comments**: Describe the "why", not the "what"
+- **Testing**: Write tests for new features
+- **Documentation**: Update README for API changes
+
+---
+
+## 📞 Support & Troubleshooting
+
+### Common Issues
+
+**Issue**: "ModuleNotFoundError: No module named 'backend'"
+```bash
+# Solution: Run from project root, not backend folder
+cd /path/to/project
+uvicorn backend.main:app --reload
+```
+
+**Issue**: "CORS error when calling API"
+```bash
+# Solution: Check CORS_ORIGINS in backend/config.py
+# Add your frontend URL to the list
+CORS_ORIGINS = ["http://localhost:3000", "https://yourfrontend.com"]
+```
+
+**Issue**: "Cannot connect to MongoDB"
+```bash
+# Solution: Start MongoDB or update connection string
+docker run -d -p 27017:27017 --name mongodb mongo:latest
+# Update MONGODB_URL in .env
+```
+
+**Issue**: "ML Models not loading"
+```bash
+# Solution: Train models first
+python scripts/train_model.py
+# Or check model folder exists: ./ml_models/
+```
+
+### Get Help
+- 📧 Email: support@careerpilot.example.com
+- 🐛 Report Issues: https://github.com/yourusername/career-pilot/issues
+- 💬 Chat Support: Visit our website
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see LICENSE file for details.
+
+---
+
+##📊 System Requirements
 
 **Minimum:**
 - Python 3.9+

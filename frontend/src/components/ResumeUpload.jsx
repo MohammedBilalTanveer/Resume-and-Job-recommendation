@@ -65,11 +65,15 @@ export const ResumeUpload = ({ onSuccess }) => {
       if (isAuthenticated) {
         try {
           const analysisData = data.ats_analysis || {};
+          // Convert decimal score (0-1) to percentage (0-100)
+          const scoreValue = analysisData.overall_score || analysisData.score || null;
+          const atsScorePercentage = scoreValue ? scoreValue * 100 : null;
+          
           await historyAPI.saveAnalysis({
             filename: file.name,
             resume_text: data.resume_text,
             job_description: jobDescription || null,
-            ats_score: analysisData.overall_score || analysisData.score || null,
+            ats_score: atsScorePercentage,
             skills: analysisData.skills || data.extracted_info?.skills || [],
             experience_years: analysisData.experience_years || data.extracted_info?.experience_years || null,
             education: analysisData.education || data.extracted_info?.education || [],

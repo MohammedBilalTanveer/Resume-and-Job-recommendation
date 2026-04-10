@@ -43,17 +43,18 @@ export const History = () => {
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
+    return date.toLocaleString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
+      hour12: true
     });
   };
 
   const getScoreColor = (score) => {
-    if (!score) return 'text-slate-400';
+    if (score === null || score === undefined) return 'text-slate-400';
     if (score >= 80) return 'text-green-400';
     if (score >= 60) return 'text-yellow-400';
     return 'text-red-400';
@@ -119,7 +120,7 @@ export const History = () => {
                     <h3 className="font-semibold text-white">
                       {analysis.filename || 'Untitled Analysis'}
                     </h3>
-                    {analysis.ats_score && (
+                    {analysis.ats_score !== null && analysis.ats_score !== undefined && (
                       <span className={`px-2 py-0.5 rounded-full text-sm font-medium ${getScoreColor(analysis.ats_score)} bg-slate-700`}>
                         {Math.round(analysis.ats_score)}% Score
                       </span>

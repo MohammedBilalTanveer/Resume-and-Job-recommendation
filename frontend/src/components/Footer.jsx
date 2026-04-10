@@ -30,7 +30,7 @@ const Footer = () => {
                     <div>
                         <h4 className="font-bold text-white mb-6">Product</h4>
                         <ul className="space-y-4">
-                            <li><Link to="/resume-upload" className="text-slate-400 hover:text-blue-400 transition-colors">Resume Scorer</Link></li>
+                            <li><Link to="/analyzer" className="text-slate-400 hover:text-blue-400 transition-colors">Resume Scorer</Link></li>
                             <li><Link to="/jobs" className="text-slate-400 hover:text-blue-400 transition-colors">Job Search</Link></li>
                             <li><Link to="#" className="text-slate-400 hover:text-blue-400 transition-colors">Skill Analysis</Link></li>
                         </ul>
@@ -39,7 +39,7 @@ const Footer = () => {
                     <div>
                         <h4 className="font-bold text-white mb-6">Company</h4>
                         <ul className="space-y-4">
-                            <li><Link to="#" className="text-slate-400 hover:text-blue-400 transition-colors">About Us</Link></li>
+                            <li><Link to="#features" className="text-slate-400 hover:text-blue-400 transition-colors">About Us</Link></li>
                             <li><Link to="#" className="text-slate-400 hover:text-blue-400 transition-colors">Contact</Link></li>
                             <li><Link to="#" className="text-slate-400 hover:text-blue-400 transition-colors">Privacy Policy</Link></li>
                         </ul>

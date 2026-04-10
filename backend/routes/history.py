@@ -1,13 +1,17 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 from backend.database import get_analyses_collection, get_next_sequence
 from backend.models.user import UserInDB, analysis_from_doc
 from backend.utils.auth import get_current_user
 
 router = APIRouter()
+
+
+# India Standard Time timezone (UTC+5:30)
+IST = timezone(timedelta(hours=5, minutes=30))
 
 
 # Request/Response Models
@@ -54,7 +58,7 @@ async def save_analysis(
     
     # Get next analysis ID
     analysis_id = await get_next_sequence("resume_analyses")
-    now = datetime.utcnow()
+    now = datetime.now(IST)  # Use India Standard Time
     
     analysis_doc = {
         "id": analysis_id,
