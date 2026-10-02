@@ -1,0 +1,15 @@
+# Keep secrets, user data and heavy build output out of Docker images
+**/.env
+**/.env.*
+!**/.env.example
+.git
+frontend/node_modules
+frontend/build
+uploads
+**/__pycache__
+**/*.pyc
+*.db
+**/*.db
+ml_models/*.pkl
+ml_models/*.pth
+*.md

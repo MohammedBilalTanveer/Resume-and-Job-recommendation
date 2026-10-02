@@ -1,40 +1,43 @@
 services:
-  # Backend API with ML
+  # Backend API (the frontend is deployed separately on Vercel)
   - type: web
     name: intellidiots-api
     runtime: docker
     dockerfilePath: ./Dockerfile.backend
     dockerContext: .
+    plan: free  # 512 MB RAM: keep ATS_SEMANTIC_MODEL=off here (the model needs ~510 MB)
+    healthCheckPath: /health
     envVars:
-      - key: MONGODB_URI
-        sync: false  # Set manually in Render dashboard
-      - key: JWT_SECRET
-        generateValue: true
-      - key: ADZUNA_APP_ID
+      # --- required: set these in the Render dashboard ---
+      - key: MONGODB_URL          # MongoDB Atlas connection string (mongodb+srv://...)
         sync: false
-      - key: ADZUNA_APP_KEY
-        sync: false
-      - key: JOOBLE_API_KEY
+      - key: FRONTEND_URL         # e.g. https://intellidiots.vercel.app (no trailing slash)
         sync: false
       - key: OPENAI_API_KEY
         sync: false
-    healthCheckPath: /health
-    plan: starter  # $7/month - needed for ML models
-
-  # Frontend Static Site  
-  - type: web
-    name: intellidiots-frontend
-    runtime: static
-    buildCommand: cd frontend && npm install && npm run build
-    staticPublishPath: ./frontend/build
-    envVars:
-      - key: REACT_APP_API_URL
-        value: https://intellidiots-api.onrender.com/api/v1
-    headers:
-      - path: /*
-        name: Cache-Control
-        value: no-cache
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
+      # --- generated / fixed values ---
+      - key: SECRET_KEY           # signs login tokens; must stay the same across restarts
+        generateValue: true
+      - key: MONGODB_DB_NAME
+        value: resume_ats
+      - key: ATS_SEMANTIC_MODEL   # set to "on" on a plan with >= 1 GB RAM for best accuracy
+        value: "off"
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      # --- optional ---
+      - key: CORS_ORIGIN_REGEX    # e.g. https://intellidiots-.*\.vercel\.app for preview deployments
+        sync: false
+      - key: ADZUNA_APP_ID
+        sync: false
+      - key: ADZUNA_API_KEY
+        sync: false
+      - key: JOOBLE_API_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_CLIENT_SECRET
+        sync: false

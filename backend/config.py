@@ -14,8 +14,20 @@ class Settings(BaseSettings):
     API_TITLE: str = "Resume ATS Scorer & Job Recommendation"
     API_VERSION: str = "1.0.0"
     
-    # CORS - allow both ports
-    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:3001", "http://localhost:8000", "*"]
+    # CORS: local dev ports + FRONTEND_URL are always allowed. Extra origins go in
+    # CORS_ORIGINS as a comma-separated list; CORS_ORIGIN_REGEX can allow e.g. Vercel
+    # preview deployments (https://your-app-.*\.vercel\.app).
+    CORS_ORIGINS: str = ""
+    CORS_ORIGIN_REGEX: str = ""
+
+    @property
+    def cors_origin_list(self) -> List[str]:
+        origins = ["http://localhost:3000", "http://localhost:3001", "http://localhost:8000"]
+        for origin in [self.FRONTEND_URL] + self.CORS_ORIGINS.split(","):
+            origin = origin.strip().rstrip("/")
+            if origin and origin not in origins:
+                origins.append(origin)
+        return origins
     
     # File Upload
     UPLOAD_FOLDER: str = os.path.join(os.path.dirname(__file__), "../uploads")

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.concurrency import run_in_threadpool
 from typing import Optional, List
 from pydantic import BaseModel
 import sys
@@ -55,32 +56,41 @@ async def search_jobs(
 async def recommend_jobs(request: RecommendJobsRequest):
     """
     Get job recommendations based on resume content.
-    Uses extracted skills to find matching jobs.
+    Infers target roles and core skills from the resume, searches several
+    queries across job sources, and ranks results by actual fit.
     """
     try:
-        if not request.resume_text:
+        if not request.resume_text or not request.resume_text.strip():
             raise HTTPException(status_code=400, detail="resume_text is required")
-        
-        # Extract skills from resume
-        resume_data = ats_scorer.extract_resume_info(request.resume_text)
+
+        resume_data = await run_in_threadpool(ats_scorer.extract_resume_info, request.resume_text)
         skills = resume_data.get("skills", [])
-        
-        if not skills:
-            raise HTTPException(status_code=400, detail="Could not extract skills from resume")
-        
-        # Search for jobs based on extracted skills
+        profile = resume_data["profile"]
+
+        if not skills and not profile.get("title"):
+            raise HTTPException(
+                status_code=400,
+                detail="Could not identify skills or a job title in the resume. "
+                       "Make sure it has a Skills section and readable (not scanned) text."
+            )
+
+        top_k = max(1, min(request.top_k or 5, 50))
         recommendations = await job_service.get_recommendations(
             skills=skills,
-            top_k=request.top_k,
-            location=request.location
+            top_k=top_k,
+            location=request.location,
+            profile=profile,
         )
-        
+
         return {
-            "extracted_skills": skills,
+            "extracted_skills": skills[:20],
+            "target_roles": job_service.infer_target_roles(profile, skills),
             "total_recommendations": len(recommendations),
             "jobs": recommendations
         }
-        
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -95,29 +105,36 @@ async def match_resume_to_job(request: MatchResumeRequest):
                 status_code=400,
                 detail="Provide either job_id or job_description, not both"
             )
-        
+
         if request.job_description:
             target_job_desc = request.job_description
         elif request.job_id:
-            # Fetch job description from API
             target_job_desc = await job_service.get_job_description(request.job_id)
+            if not target_job_desc:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Job not found - search or get recommendations first, or pass job_description"
+                )
         else:
             raise HTTPException(
                 status_code=400,
                 detail="Either job_id or job_description is required"
             )
-        
-        # Calculate ATS score
-        ats_result = ats_scorer.calculate_ats_score(request.resume_text, target_job_desc)
-        
+
+        ats_result = await run_in_threadpool(ats_scorer.calculate_ats_score, request.resume_text, target_job_desc)
+
         return {
             "job_id": request.job_id,
             "match_score": ats_result["score"],
             "matching_keywords": ats_result["matching_keywords"],
             "missing_keywords": ats_result["missing_keywords"],
-            "match_percentage": round(ats_result["score"] * 100, 2)
+            "match_percentage": round(ats_result["score"] * 100, 2),
+            "grade": ats_result["grade"],
+            "breakdown": ats_result["breakdown"],
         }
-        
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

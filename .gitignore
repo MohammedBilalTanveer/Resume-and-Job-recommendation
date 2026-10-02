@@ -17,3 +17,6 @@ uploads/
 *.pkl
 *.pth
 .kaggle/
+
+# Local databases (may contain user data)
+*.db

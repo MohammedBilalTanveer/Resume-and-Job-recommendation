@@ -1,8 +1,10 @@
 from fastapi import APIRouter, File, UploadFile, Form, HTTPException, Body
+from fastapi.concurrency import run_in_threadpool
 from typing import Optional
 from pydantic import BaseModel
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 # Add parent directories to path
@@ -41,19 +43,34 @@ async def upload_resume(
                 detail=f"Invalid file type. Allowed: {', '.join(settings.ALLOWED_EXTENSIONS)}"
             )
         
-        # Save uploaded file
+        contents = await file.read()
+        if len(contents) > settings.MAX_FILE_SIZE:
+            raise HTTPException(status_code=413, detail="File too large (max 10MB)")
+        if not contents:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty")
+
+        # Parse from a uniquely named temp file that is deleted right away:
+        # resumes are personal data and shouldn't be kept on the server, and
+        # unique names stop concurrent uploads of "resume.pdf" clobbering each other.
         os.makedirs(settings.UPLOAD_FOLDER, exist_ok=True)
-        file_path = os.path.join(settings.UPLOAD_FOLDER, file.filename)
+        suffix = Path(file.filename).suffix.lower()
+        fd, file_path = tempfile.mkstemp(suffix=suffix, dir=settings.UPLOAD_FOLDER)
+        try:
+            with os.fdopen(fd, "wb") as f:
+                f.write(contents)
+            resume_text = await run_in_threadpool(parse_resume, file_path)
+        finally:
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
         
-        with open(file_path, "wb") as f:
-            contents = await file.read()
-            f.write(contents)
-        
-        # Parse resume
-        resume_text = parse_resume(file_path)
-        
-        if not resume_text:
-            raise HTTPException(status_code=400, detail="Could not parse resume")
+        if not resume_text or not resume_text.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Could not read any text from this file. If it's a scanned/image PDF, "
+                       "export it as a text-based PDF or upload a DOCX."
+            )
         
         # Basic response structure
         response = {
@@ -64,21 +81,12 @@ async def upload_resume(
         
         # Perform comprehensive ATS analysis if job description provided
         if job_description and job_description.strip():
-            analysis = advanced_ats_scorer.comprehensive_analysis(resume_text, job_description)
+            analysis = await run_in_threadpool(
+                advanced_ats_scorer.comprehensive_analysis, resume_text, job_description)
             response["ats_analysis"] = analysis
         else:
-            # Just extract basic info without job comparison
-            resume_lower = resume_text.lower()
-            skills = advanced_ats_scorer._extract_all_skills(resume_lower)
-            response["extracted_info"] = {
-                "skills": skills["all"],
-                "skills_by_category": skills["by_category"],
-                "experience_years": advanced_ats_scorer._extract_experience_years(resume_lower),
-                "education": advanced_ats_scorer._extract_education(resume_lower),
-                "contact_info": advanced_ats_scorer._extract_contact_info(resume_text),
-                "sections": advanced_ats_scorer._analyze_resume_structure(resume_text),
-                "action_verbs": advanced_ats_scorer._extract_action_verbs(resume_text)
-            }
+            # Resume-only analysis without job comparison
+            response["extracted_info"] = await run_in_threadpool(advanced_ats_scorer.resume_insights, resume_text)
         
         return response
         
@@ -102,8 +110,9 @@ async def score_resume(request: ScoreRequest):
                 detail="Both resume_text and job_description are required"
             )
         
-        analysis = advanced_ats_scorer.comprehensive_analysis(
-            request.resume_text, 
+        analysis = await run_in_threadpool(
+            advanced_ats_scorer.comprehensive_analysis,
+            request.resume_text,
             request.job_description
         )
         
@@ -122,18 +131,7 @@ async def extract_skills(request: ExtractRequest):
     Extract skills and information from resume text.
     """
     try:
-        resume_lower = request.resume_text.lower()
-        skills = advanced_ats_scorer._extract_all_skills(resume_lower)
-        
-        return {
-            "skills": skills["all"],
-            "skills_by_category": skills["by_category"],
-            "experience_years": advanced_ats_scorer._extract_experience_years(resume_lower),
-            "education": advanced_ats_scorer._extract_education(resume_lower),
-            "contact_info": advanced_ats_scorer._extract_contact_info(request.resume_text),
-            "sections": advanced_ats_scorer._analyze_resume_structure(request.resume_text),
-            "action_verbs": advanced_ats_scorer._extract_action_verbs(request.resume_text)
-        }
+        return await run_in_threadpool(advanced_ats_scorer.resume_insights, request.resume_text)
     except Exception as e:
         print(f"[ERROR] Skill extraction failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -199,7 +197,7 @@ async def get_sample_score():
     - Team leadership experience
     """
     
-    analysis = advanced_ats_scorer.comprehensive_analysis(sample_resume, sample_job)
+    analysis = await run_in_threadpool(advanced_ats_scorer.comprehensive_analysis, sample_resume, sample_job)
     
     return {
         "sample_resume": sample_resume,
@@ -217,7 +215,7 @@ async def quick_score(
     Quick ATS score calculation (simplified response).
     """
     try:
-        analysis = advanced_ats_scorer.comprehensive_analysis(resume_text, job_description)
+        analysis = await run_in_threadpool(advanced_ats_scorer.comprehensive_analysis, resume_text, job_description)
         
         return {
             "score": analysis["overall_score"],

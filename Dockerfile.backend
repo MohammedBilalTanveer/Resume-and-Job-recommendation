@@ -1,28 +1,32 @@
 FROM python:3.10-slim
 
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    HF_HOME=/app/.cache/huggingface
+
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    gcc \
-    && rm -rf /var/lib/apt/lists/*
+# CPU-only PyTorch first: the default PyPI wheel bundles ~2GB of CUDA libraries
+# that a CPU server never uses. requirements.txt then sees torch already satisfied.
+RUN pip install torch==2.5.1 --index-url https://download.pytorch.org/whl/cpu
 
-# Copy requirements
 COPY backend/requirements.txt .
+RUN pip install -r requirements.txt
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt && \
-    python -m spacy download en_core_web_sm
+# Bake the sentence-embedding model into the image so instances with
+# ATS_SEMANTIC_MODEL=on don't download it on every cold start.
+# Build with --build-arg PRELOAD_MODEL=0 to skip (smaller image when the model is off).
+ARG PRELOAD_MODEL=1
+RUN if [ "$PRELOAD_MODEL" = "1" ]; then \
+      python -c "from transformers import AutoModel, AutoTokenizer; n='sentence-transformers/all-MiniLM-L6-v2'; AutoTokenizer.from_pretrained(n); AutoModel.from_pretrained(n)"; \
+    fi
 
-# Copy backend code
 COPY backend/ /app/backend/
-COPY ml_models/ /app/ml_models/
-COPY data/ /app/data/
 
-# Create uploads directory
-RUN mkdir -p /app/uploads
+RUN mkdir -p /app/uploads /app/ml_models
 
 EXPOSE 8000
 
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Render (and most hosts) provide the port in $PORT
+CMD ["sh", "-c", "uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips='*'"]
