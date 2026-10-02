@@ -9,7 +9,9 @@ WORKDIR /app
 
 # CPU-only PyTorch first: the default PyPI wheel bundles ~2GB of CUDA libraries
 # that a CPU server never uses. requirements.txt then sees torch already satisfied.
-RUN pip install torch==2.5.1 --index-url https://download.pytorch.org/whl/cpu
+# (--extra-index-url, not --index-url: torch's own dependencies must still come from PyPI)
+RUN pip install --upgrade pip && \
+    pip install "torch==2.5.1+cpu" --extra-index-url https://download.pytorch.org/whl/cpu
 
 COPY backend/requirements.txt .
 RUN pip install -r requirements.txt
