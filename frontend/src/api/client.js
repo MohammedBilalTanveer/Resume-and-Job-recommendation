@@ -1,6 +1,13 @@
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
+// REACT_APP_API_URL should be the backend URL ending in /api/v1. If it's given without
+// the /api/v1 suffix (e.g. "https://my-api.onrender.com/"), add it so requests don't 404.
+const normalizeApiUrl = (url) => {
+  const base = (url || 'http://localhost:8000').trim().replace(/\/+$/, '');
+  return /\/api\/v1$/.test(base) ? base : `${base}/api/v1`;
+};
+
+const API_BASE_URL = normalizeApiUrl(process.env.REACT_APP_API_URL);
 
 const api = axios.create({
   baseURL: API_BASE_URL,
