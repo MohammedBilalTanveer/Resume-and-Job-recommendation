@@ -31,20 +31,20 @@ export const Login = () => {
   };
 
   const handleGoogleLogin = async () => {
-    const authUrl = await getGoogleAuthUrl();
-    if (authUrl) {
-      window.location.href = authUrl;
+    const { url, error: urlError } = await getGoogleAuthUrl();
+    if (url) {
+      window.location.href = url;
     } else {
-      setLocalError('Google login is not configured');
+      setLocalError(urlError);
     }
   };
 
   const handleGitHubLogin = async () => {
-    const authUrl = await getGitHubAuthUrl();
-    if (authUrl) {
-      window.location.href = authUrl;
+    const { url, error: urlError } = await getGitHubAuthUrl();
+    if (url) {
+      window.location.href = url;
     } else {
-      setLocalError('GitHub login is not configured');
+      setLocalError(urlError);
     }
   };
 

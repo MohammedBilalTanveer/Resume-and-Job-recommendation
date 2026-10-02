@@ -56,20 +56,20 @@ export const Signup = () => {
   };
 
   const handleGoogleSignup = async () => {
-    const authUrl = await getGoogleAuthUrl();
-    if (authUrl) {
-      window.location.href = authUrl;
+    const { url, error: urlError } = await getGoogleAuthUrl();
+    if (url) {
+      window.location.href = url;
     } else {
-      setLocalError('Google signup is not configured');
+      setLocalError(urlError);
     }
   };
 
   const handleGitHubSignup = async () => {
-    const authUrl = await getGitHubAuthUrl();
-    if (authUrl) {
-      window.location.href = authUrl;
+    const { url, error: urlError } = await getGitHubAuthUrl();
+    if (url) {
+      window.location.href = url;
     } else {
-      setLocalError('GitHub signup is not configured');
+      setLocalError(urlError);
     }
   };
 

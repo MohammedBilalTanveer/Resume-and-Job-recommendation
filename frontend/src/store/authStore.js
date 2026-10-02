@@ -2,6 +2,18 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import api from '../api/client';
 
+// Turn a failed "get login URL" request into a message that says what actually went wrong
+const oauthErrorMessage = (error, provider) => {
+  if (!error.response) {
+    // No response at all: wrong REACT_APP_API_URL, backend down/asleep, or blocked by CORS
+    return `Can't reach the server (${api.defaults.baseURL}). Please try again in a minute.`;
+  }
+  if (error.response.status === 501) {
+    return `${provider} login is not configured on the server`;
+  }
+  return error.response.data?.detail || `${provider} login failed (error ${error.response.status})`;
+};
+
 const useAuthStore = create(
   persist(
     (set, get) => ({
@@ -81,14 +93,14 @@ const useAuthStore = create(
         get().clearAuth();
       },
 
-      // Get Google OAuth URL
+      // Get Google OAuth URL -> { url } or { error: reason to show the user }
       getGoogleAuthUrl: async () => {
         try {
           const response = await api.get('/auth/google');
-          return response.data.auth_url;
+          return { url: response.data.auth_url };
         } catch (error) {
           console.error('Google auth error:', error);
-          return null;
+          return { error: oauthErrorMessage(error, 'Google') };
         }
       },
 
@@ -110,14 +122,14 @@ const useAuthStore = create(
         }
       },
 
-      // Get GitHub OAuth URL
+      // Get GitHub OAuth URL -> { url } or { error: reason to show the user }
       getGitHubAuthUrl: async () => {
         try {
           const response = await api.get('/auth/github');
-          return response.data.auth_url;
+          return { url: response.data.auth_url };
         } catch (error) {
           console.error('GitHub auth error:', error);
-          return null;
+          return { error: oauthErrorMessage(error, 'GitHub') };
         }
       },
 
