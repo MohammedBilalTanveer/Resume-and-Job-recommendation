@@ -4,8 +4,9 @@ from pydantic import BaseModel, EmailStr
 from typing import Optional
 from datetime import datetime
 import httpx
-import os
+from urllib.parse import urlencode
 
+from backend.config import settings
 from backend.database import get_users_collection
 from backend.models.user import UserInDB, user_from_doc
 from backend.utils.auth import (
@@ -17,12 +18,22 @@ from backend.utils.auth import (
 
 router = APIRouter()
 
-# OAuth Configuration
-GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
-GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
-GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID", "")
-GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET", "")
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+# OAuth Configuration (resolved in config.py, which also accepts alternative
+# names such as GOOGLE_CLIENT_API / GOOGLE_SECRET_API / GITHUB_SECRET_KEY)
+GOOGLE_CLIENT_ID = settings.GOOGLE_CLIENT_ID.strip()
+GOOGLE_CLIENT_SECRET = settings.GOOGLE_CLIENT_SECRET.strip()
+GITHUB_CLIENT_ID = settings.GITHUB_CLIENT_ID.strip()
+GITHUB_CLIENT_SECRET = settings.GITHUB_CLIENT_SECRET.strip()
+FRONTEND_URL = settings.FRONTEND_URL.strip().rstrip("/")
+
+
+def _provider_error(response: httpx.Response) -> str:
+    """Short, non-secret reason from an OAuth provider error (e.g. redirect_uri_mismatch)."""
+    try:
+        data = response.json()
+        return data.get("error_description") or data.get("error") or response.reason_phrase
+    except Exception:
+        return response.reason_phrase or str(response.status_code)
 
 
 # Request/Response Models
@@ -270,18 +281,15 @@ async def google_login():
             detail="Google OAuth not configured"
         )
     
-    redirect_uri = f"{FRONTEND_URL}/auth/callback/google"
-    scope = "openid email profile"
-    
-    google_auth_url = (
-        f"https://accounts.google.com/o/oauth2/v2/auth?"
-        f"client_id={GOOGLE_CLIENT_ID}&"
-        f"redirect_uri={redirect_uri}&"
-        f"response_type=code&"
-        f"scope={scope}&"
-        f"access_type=offline"
-    )
-    
+    params = {
+        "client_id": GOOGLE_CLIENT_ID,
+        "redirect_uri": f"{FRONTEND_URL}/auth/callback/google",
+        "response_type": "code",
+        "scope": "openid email profile",
+        "prompt": "select_account",
+    }
+    google_auth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
+
     return {"auth_url": google_auth_url}
 
 
@@ -297,7 +305,7 @@ async def google_callback(code: str):
     redirect_uri = f"{FRONTEND_URL}/auth/callback/google"
     
     # Exchange code for tokens
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=15) as client:
         token_response = await client.post(
             "https://oauth2.googleapis.com/token",
             data={
@@ -308,11 +316,11 @@ async def google_callback(code: str):
                 "redirect_uri": redirect_uri
             }
         )
-        
+
         if token_response.status_code != 200:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Failed to exchange code for token"
+                detail=f"Google login failed: {_provider_error(token_response)}"
             )
         
         token_data = token_response.json()
@@ -336,6 +344,13 @@ async def google_callback(code: str):
     email = user_info.get("email")
     name = user_info.get("name")
     picture = user_info.get("picture")
+
+    # Only trust verified emails - accounts are linked by email below
+    if not google_id or not email or not user_info.get("verified_email", False):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Your Google account has no verified email address"
+        )
     
     # Check if user exists by OAuth ID
     user = await get_user_by_oauth("google", google_id)
@@ -398,15 +413,12 @@ async def github_login():
             detail="GitHub OAuth not configured"
         )
     
-    redirect_uri = f"{FRONTEND_URL}/auth/callback/github"
-    scope = "user:email"
-    
-    github_auth_url = (
-        f"https://github.com/login/oauth/authorize?"
-        f"client_id={GITHUB_CLIENT_ID}&"
-        f"redirect_uri={redirect_uri}&"
-        f"scope={scope}"
-    )
+    params = {
+        "client_id": GITHUB_CLIENT_ID,
+        "redirect_uri": f"{FRONTEND_URL}/auth/callback/github",
+        "scope": "read:user user:email",
+    }
+    github_auth_url = f"https://github.com/login/oauth/authorize?{urlencode(params)}"
     
     return {"auth_url": github_auth_url}
 
@@ -421,30 +433,26 @@ async def github_callback(code: str):
         )
     
     # Exchange code for tokens
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=15) as client:
         token_response = await client.post(
             "https://github.com/login/oauth/access_token",
             data={
                 "client_id": GITHUB_CLIENT_ID,
                 "client_secret": GITHUB_CLIENT_SECRET,
-                "code": code
+                "code": code,
+                "redirect_uri": f"{FRONTEND_URL}/auth/callback/github",
             },
             headers={"Accept": "application/json"}
         )
-        
-        if token_response.status_code != 200:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Failed to exchange code for token"
-            )
-        
-        token_data = token_response.json()
+
+        # GitHub answers 200 even on failure, with {"error": ...} in the body
+        token_data = token_response.json() if token_response.status_code == 200 else {}
         github_access_token = token_data.get("access_token")
-        
+
         if not github_access_token:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Failed to get access token"
+                detail=f"GitHub login failed: {_provider_error(token_response)}"
             )
         
         # Get user info
@@ -460,27 +468,24 @@ async def github_callback(code: str):
             )
         
         user_info = user_response.json()
-        
-        # Get user email (might need separate request)
-        email = user_info.get("email")
-        if not email:
-            emails_response = await client.get(
-                "https://api.github.com/user/emails",
-                headers={"Authorization": f"Bearer {github_access_token}"}
-            )
-            if emails_response.status_code == 200:
-                emails = emails_response.json()
-                primary_email = next(
-                    (e for e in emails if e.get("primary") and e.get("verified")),
-                    None
-                )
-                if primary_email:
-                    email = primary_email.get("email")
-    
+
+        # Use a verified email (accounts are linked by email below): primary first,
+        # then any other verified address
+        email = None
+        emails_response = await client.get(
+            "https://api.github.com/user/emails",
+            headers={"Authorization": f"Bearer {github_access_token}"}
+        )
+        if emails_response.status_code == 200:
+            verified = [e for e in emails_response.json() if e.get("verified")]
+            chosen = next((e for e in verified if e.get("primary")), verified[0] if verified else None)
+            if chosen:
+                email = chosen.get("email")
+
     if not email:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Could not get email from GitHub"
+            detail="Your GitHub account has no verified email address"
         )
     
     github_id = str(user_info.get("id"))

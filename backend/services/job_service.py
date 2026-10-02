@@ -3,11 +3,12 @@ import asyncio
 import re
 import time
 from typing import List, Optional, Dict, Tuple
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from backend.config import settings
 from backend.utils import skills_taxonomy as tax
 from backend.utils import text_utils as tu
 from backend.utils.semantic import calibrate, similarity_matrix
+from backend.services.job_store import JobStore, QuotaTracker, parse_markets, CITY_ALIASES, _REMOTE_RE
 
 
 # Role families used to infer target job titles from a resume's skills when the
@@ -89,6 +90,11 @@ class JobService:
         self.timeout = aiohttp.ClientTimeout(total=15, connect=6)
         # Job boards rate-limit aggressively (Remotive asks for few requests/day)
         self._cache = _TTLCache(ttl_seconds=1800)
+        # Daily-refreshed job catalog in MongoDB + API quota tracking
+        self.store = JobStore()
+        self.quota = QuotaTracker(self.store)
+        self._refresh_lock = asyncio.Lock()
+        self.refresh_state: Dict = {"running": False}
 
     def _deduplicate_jobs(self, jobs: List[Dict]) -> List[Dict]:
         """
@@ -107,6 +113,10 @@ class JobService:
             description = tu.strip_html(job.get("description") or "").lower()[:160].strip()
             url = (job.get("url") or "").split("?")[0].lower()
             keys = {f"{company}|{title}|{description}"}
+            # Same company + title across sources/cities is one opening for our purposes
+            company_key = re.sub(r"\b(?:inc|llc|ltd|limited|corp|corporation|pvt|private|co)\b|\W+", "", company)
+            if company_key and title:
+                keys.add(f"{company_key}|{title}")
             if url:
                 keys.add(url)
             if keys & seen:
@@ -133,7 +143,7 @@ class JobService:
 
         tasks = []
         async with aiohttp.ClientSession(timeout=self.timeout) as session:
-            if source is None or source == "remotive":
+            if (source is None and settings.ENABLE_REMOTIVE) or source == "remotive":
                 tasks.append(self._search_remotive(session, keyword, location, job_type))
             if source is None or source == "adzuna":
                 tasks.append(self._search_adzuna(session, keyword, location))
@@ -151,6 +161,9 @@ class JobService:
         results = self._deduplicate_jobs(results)
         if results:
             self._cache.set(cache_key, results)
+            # Everything fetched live also goes into the catalog
+            enriched = await asyncio.to_thread(self.enrich_jobs, [dict(j) for j in results])
+            await self.store.upsert_jobs(enriched)
         return results
 
     async def _search_remotive(
@@ -165,7 +178,9 @@ class JobService:
         Free API - no authentication needed.
         """
         try:
-            params = {"search": keyword, "limit": 50}
+            if not settings.ENABLE_REMOTIVE or not await self.quota.acquire("remotive"):
+                return []
+            params = {"search": keyword, "limit": 100} if keyword else {}
             async with session.get(self.remotive_url, params=params) as resp:
                 if resp.status != 200:
                     print(f"Remotive API error: {resp.status}")
@@ -193,16 +208,22 @@ class JobService:
             print(f"Error searching Remotive: {e}")
             return []
 
-    async def _search_adzuna(self, session: aiohttp.ClientSession, keyword: str, location: str) -> List[Dict]:
+    async def _search_adzuna(self, session: aiohttp.ClientSession, keyword: str, location: str,
+                             country: Optional[str] = None, where: Optional[str] = None) -> List[Dict]:
         """
-        Search jobs from Adzuna API.
-        Requires API credentials.
+        Search jobs from Adzuna API (one quota-counted call, up to 50 results).
+        Requires API credentials. `country`/`where` override the free-text location.
         """
         try:
             if not self.adzuna_app_id or not self.adzuna_app_key:
                 return []
+            if not await self.quota.acquire("adzuna"):
+                return []
 
-            country_code, where = self._adzuna_country(location)
+            if country is None:
+                country_code, where = self._adzuna_country(location)
+            else:
+                country_code, where = country, where or ""
             params = {
                 "app_id": self.adzuna_app_id,
                 "app_key": self.adzuna_app_key,
@@ -238,6 +259,7 @@ class JobService:
                         "posted_date": job.get("created"),
                         "source": "adzuna",
                         "salary": salary,
+                        "_country": country_code,
                     })
                 return jobs
 
@@ -273,6 +295,8 @@ class JobService:
         """
         try:
             if not self.jooble_key:
+                return []
+            if not await self.quota.acquire("jooble"):
                 return []
 
             url = f"https://jooble.org/api/{self.jooble_key}"
@@ -399,8 +423,11 @@ class JobService:
         scored = []
         for job in jobs:
             title = job.get("title") or ""
-            desc = tu.strip_html(job.get("description") or "")
-            job_skills = tax.find_skills(f"{title}\n{desc}")
+            desc = job.get("_text") or tu.strip_html(job.get("description") or "")
+            if job.get("_skills") is not None:  # extracted once when the job was stored
+                job_skills = {n: {"category": tax.CANONICAL_CATEGORY.get(n, ""), "count": 1} for n in job["_skills"]}
+            else:
+                job_skills = tax.find_skills(f"{title}\n{desc}")
             title_skills = tax.find_skills(title)
             for tag in job.get("tags") or []:
                 for name in tax.find_skills(str(tag)):
@@ -474,18 +501,26 @@ class JobService:
                     score *= 0.9
 
             job_loc = (job.get("location") or "").lower()
-            if loc and loc not in ("remote", "anywhere"):
+            if loc in ("remote", "anywhere", ""):
+                # Adzuna/Jooble have no remote filter: prefer postings that say remote
+                remote_text = f"{job_loc} {(job.get('title') or '').lower()} {x['desc'][:600].lower()}"
+                if job.get("source") == "remotive" or job.get("_is_remote") or _REMOTE_RE.search(remote_text):
+                    reasons.append("Remote")
+                else:
+                    score *= 0.85
+            elif loc:
                 if loc in job_loc or any(w in job_loc for w in ("worldwide", "anywhere")):
                     score = min(1.0, score * 1.05)
                 elif job.get("source") == "remotive" and job_loc:
                     score *= 0.85
 
+            x["matched"].sort(key=tax.is_soft_skill)  # technical skills first
             if x["matched"]:
                 reasons.insert(0, f"Matches your skills: {', '.join(x['matched'][:5])}")
             if title_fit >= 0.6:
                 reasons.insert(0, "Title fits your background")
 
-            out = dict(job)
+            out = {k: v for k, v in job.items() if not k.startswith("_")}
             out.update({
                 "match_score": round(score * 100, 1),
                 "matched_skills": x["matched"][:10],
@@ -497,6 +532,69 @@ class JobService:
         ranked.sort(key=lambda j: j["match_score"], reverse=True)
         return ranked
 
+    @staticmethod
+    def enrich_jobs(jobs: List[Dict]) -> List[Dict]:
+        """Pre-compute what ranking needs (skills, plain text, remote flag, dates) - once per job."""
+        for job in jobs:
+            title = job.get("title") or ""
+            text = tu.strip_html(job.get("description") or "")
+            skills = set(tax.find_skills(f"{title}\n{text}"))
+            for tag in job.get("tags") or []:
+                skills |= set(tax.find_skills(str(tag)))
+            job["_skills"] = sorted(skills)
+            job["_text"] = text[:2500]
+            job["_is_remote"] = job.get("source") == "remotive" or bool(
+                _REMOTE_RE.search(f"{job.get('location') or ''} {title}"))
+            age = JobService._days_old(job.get("posted_date"))
+            job["_posted_at"] = (datetime.utcnow() - timedelta(days=age)) if age is not None else None
+            if not job.get("_country"):
+                loc = (job.get("location") or "").lower()
+                job["_country"] = "in" if "india" in loc or any(
+                    c in loc for c in ("bangalore", "bengaluru", "mumbai", "delhi", "hyderabad", "pune",
+                                       "chennai", "kolkata", "noida", "gurgaon", "gurugram")) else None
+        return jobs
+
+    def _market(self, location: Optional[str]) -> Tuple[str, str]:
+        """(Adzuna country, where) for a user's free-text location."""
+        loc = (location or "").strip()
+        if loc.lower() in ("", "remote", "anywhere", "worldwide"):
+            return "in", ""
+        country, where = self._adzuna_country(loc)
+        # Use the rotation's spelling ("Bengaluru" -> "Bangalore") so searches share one plan row
+        for market_country, market_where in parse_markets(settings.JOB_MARKETS):
+            if market_country == country and market_where and \
+                    where.lower() in CITY_ALIASES.get(market_where.lower(), [market_where.lower()]):
+                return country, market_where
+        return country, where
+
+    async def _live_fallback(self, queries: List[str], location: Optional[str]) -> List[Dict]:
+        """
+        Live search for roles the catalog doesn't cover well. Each query is searched at
+        most once a day per market, and it's added to the rotation so the daily refresh
+        keeps it fresh from then on.
+        """
+        country, where = self._market(location)
+        loc_text = location or "remote"
+        remote = loc_text.lower() in ("remote", "anywhere", "worldwide")
+        jobs: List[Dict] = []
+        async with aiohttp.ClientSession(timeout=self.timeout) as session:
+            for q in queries:
+                if await self.store.recently_fetched("adzuna", country, where, q):
+                    continue
+                batch = await self._search_adzuna(session, f"{q} remote" if remote else q, loc_text,
+                                                  country=country, where=where)
+                await self.store.add_demand("adzuna", country, where, q, fetched=bool(batch))
+                jobs.extend(batch)
+            # Jooble's account quota is small: one query, only when Adzuna found little
+            if len(jobs) < 15 and queries and not await self.store.recently_fetched("jooble", country, where, queries[0]):
+                batch = await self._search_jooble(session, queries[0], "remote" if remote else loc_text)
+                await self.store.add_demand("jooble", country, where, queries[0], fetched=bool(batch))
+                jobs.extend(batch)
+        if jobs:
+            jobs = await asyncio.to_thread(self.enrich_jobs, jobs)
+            await self.store.upsert_jobs(jobs, query_key=f"live|{country}|{where}")
+        return jobs
+
     async def get_recommendations(
         self,
         skills: List[str],
@@ -506,8 +604,9 @@ class JobService:
     ) -> List[Dict]:
         """
         Get job recommendations for a candidate.
-        Searches several queries (target roles + core skills) across all sources
-        concurrently, then ranks every result by actual fit.
+        Served from the job catalog (MongoDB, refreshed daily). Only when the catalog has
+        too few strong matches does it run a quota-limited live search, whose results are
+        stored for everyone after. Without MongoDB it falls back to live search.
         """
         try:
             if not skills and not profile:
@@ -519,30 +618,121 @@ class JobService:
             roles = self.infer_target_roles(profile, skills)
             core = [s for s in skills if not tax.is_soft_skill(s)
                     and tax.CANONICAL_CATEGORY.get(s) not in ("concepts_practices", "certifications")]
-            queries = list(dict.fromkeys(roles[:3] + core[:2])) or skills[:2]
-            loc = location or "remote"
+            shortlist = max(30, top_k * 4)
+            top_k = max(1, top_k)
 
-            results = await asyncio.gather(*(self.search_jobs(q, loc) for q in queries),
+            if await self.store.available():
+                candidates = await self.store.find_candidates(core[:12] or skills[:12], roles, location)
+                ranked = await asyncio.to_thread(self.rank_jobs, self._deduplicate_jobs(candidates),
+                                                 profile, skills, roles, location, shortlist)
+                strong = [j for j in ranked if j["match_score"] >= 60]
+                if len(strong) < top_k:
+                    live = await self._live_fallback(roles[:2] or core[:1], location)
+                    if live:
+                        ranked = await asyncio.to_thread(self.rank_jobs, self._deduplicate_jobs(candidates + live),
+                                                         profile, skills, roles, location, shortlist)
+                return ranked[:top_k]
+
+            # No database: previous behaviour (live search, cached in memory, quota-guarded)
+            queries = list(dict.fromkeys(roles[:3] + core[:2])) or skills[:2]
+            results = await asyncio.gather(*(self.search_jobs(q, location or "remote") for q in queries),
                                            return_exceptions=True)
             jobs = []
             for r in results:
                 if not isinstance(r, Exception):
                     jobs.extend(r)
-            jobs = self._deduplicate_jobs(jobs)
-
-            # Embedding similarity is CPU-bound: keep it off the event loop
-            ranked = await asyncio.to_thread(self.rank_jobs, jobs, profile, skills, roles, location,
-                                             max(30, top_k * 4))
-            return ranked[:max(1, top_k)]
+            ranked = await asyncio.to_thread(self.rank_jobs, self._deduplicate_jobs(jobs), profile, skills,
+                                             roles, location, shortlist)
+            return ranked[:top_k]
 
         except Exception as e:
             print(f"Error getting recommendations: {e}")
             return []
 
+    # ------------------------------------------------------------------
+    # Daily rotating refresh
+    # ------------------------------------------------------------------
+
+    async def run_refresh(self, max_adzuna_calls: Optional[int] = None) -> Dict:
+        """
+        Fetch today's slice of the rotation plan and store it. Adzuna gets a daily budget
+        that leaves headroom (per day/week/month) for live fallbacks; Remotive (if enabled)
+        is fetched as one full feed. Jooble is reserved for live fallbacks.
+        """
+        if self._refresh_lock.locked():
+            return {"status": "already_running"}
+        async with self._refresh_lock:
+            stats = {"started_at": datetime.utcnow(), "adzuna_calls": 0, "jobs_stored": 0,
+                     "queries": 0, "errors": 0, "remotive_jobs": 0}
+            self.refresh_state = {"running": True, **stats}
+            try:
+                if not await self.store.available():
+                    stats["status"] = "error: MongoDB unavailable"
+                    return stats
+                await self.store.ensure_plan(parse_markets(settings.JOB_MARKETS))
+
+                budget = min(settings.ADZUNA_REFRESH_PER_DAY,
+                             await self.quota.remaining("adzuna", {"day": 10, "week": 30, "month": 60}))
+                if max_adzuna_calls is not None:
+                    budget = min(budget, max_adzuna_calls)
+                picks = await self.store.pick_queries("adzuna", max(0, budget)) if self.adzuna_app_id else []
+
+                async with aiohttp.ClientSession(timeout=self.timeout) as session:
+                    for plan in picks:
+                        try:
+                            jobs = await self._search_adzuna(session, plan["query"], plan.get("where") or "",
+                                                             country=plan["country"], where=plan.get("where") or "")
+                            stats["adzuna_calls"] += 1
+                            stats["queries"] += 1
+                            if jobs:
+                                jobs = await asyncio.to_thread(self.enrich_jobs, jobs)
+                                stats["jobs_stored"] += await self.store.upsert_jobs(jobs, query_key=plan["_id"])
+                            await self.store.mark_fetched(plan["_id"], len(jobs))
+                        except Exception as e:
+                            stats["errors"] += 1
+                            print(f"[WARN] Refresh query failed ({plan['_id']}): {e}")
+                        self.refresh_state.update(stats)
+
+                    if settings.ENABLE_REMOTIVE:
+                        feed = await self._search_remotive(session, "", "remote", None)
+                        if feed:
+                            feed = await asyncio.to_thread(self.enrich_jobs, feed)
+                            stats["remotive_jobs"] = await self.store.upsert_jobs(feed, query_key="remotive|feed")
+
+                stats["status"] = "ok"
+                return stats
+            except Exception as e:
+                stats["status"] = f"error: {e}"
+                return stats
+            finally:
+                stats["finished_at"] = datetime.utcnow()
+                stats["adzuna_usage"] = await self.quota.usage("adzuna")
+                self.refresh_state = {"running": False, **stats}
+                try:
+                    await self.store.save_run(stats)
+                except Exception:
+                    pass
+
+    async def refresh_status(self) -> Dict:
+        return {
+            "current": self.refresh_state,
+            "last_run": await self.store.last_run(),
+            "catalog": await self.store.stats(),
+            "quota_used": {src: await self.quota.usage(src) for src in ("adzuna", "jooble", "remotive")},
+            "quota_limits": {src: self.quota.limits(src) for src in ("adzuna", "jooble", "remotive")},
+        }
+
+    # ------------------------------------------------------------------
+    # Catalog-backed helpers
+    # ------------------------------------------------------------------
+
     async def get_job_description(self, job_id: str) -> str:
         """
-        Get full job description by job ID (searches the cached results).
+        Get full job description by job ID (job catalog first, then in-memory cache).
         """
+        job = await self.store.find_by_id(job_id)
+        if job:
+            return f"{job.get('title') or ''}\n{job.get('_text') or tu.strip_html(job.get('description') or '')}"
         for _, (_, jobs) in list(self._cache._data.items()):
             for job in jobs:
                 if str(job.get("id")) == str(job_id):
@@ -551,53 +741,26 @@ class JobService:
 
     async def get_trending_jobs(self, limit: int = 10, location: str = "remote") -> List[Dict]:
         """
-        Get trending jobs.
+        Most recently posted jobs from the catalog (no API calls).
         """
         try:
-            trending_keywords = [
-                "Python", "React", "Machine Learning",
-                "AWS", "DevOps", "Data Science"
-            ]
-
-            batches = await asyncio.gather(*(self.search_jobs(k, location) for k in trending_keywords),
-                                           return_exceptions=True)
-            all_jobs = []
-            for batch in batches:
-                if not isinstance(batch, Exception):
-                    all_jobs.extend(batch)
-
-            unique_jobs = self._deduplicate_jobs(all_jobs)
-            unique_jobs.sort(key=lambda j: self._days_old(j.get("posted_date")) or 9999)
-
-            return unique_jobs[:limit]
-
+            return await self.store.recent_jobs(limit=limit, location=location)
         except Exception as e:
             print(f"Error getting trending jobs: {e}")
             return []
 
     async def analyze_skills_demand(self) -> Dict:
         """
-        Analyze most in-demand skills from job postings.
+        Most in-demand skills across every job in the catalog (no API calls).
         """
         try:
-            trending_jobs = await self.get_trending_jobs(limit=150)
-
-            skills_count: Dict[str, int] = {}
-            for job in trending_jobs:
-                text = tu.strip_html(f"{job.get('title') or ''}\n{job.get('description') or ''}")
-                for skill in tax.find_skills(text):
-                    if tax.is_soft_skill(skill):
-                        continue
-                    skills_count[skill] = skills_count.get(skill, 0) + 1
-
-            sorted_skills = sorted(skills_count.items(), key=lambda x: x[1], reverse=True)
-
+            rows, total = await self.store.skills_demand(top=60)
+            top = [(skill, n) for skill, n in rows if not tax.is_soft_skill(skill)][:20]
             return {
-                "top_skills": sorted_skills[:20],
-                "total_jobs_analyzed": len(trending_jobs),
+                "top_skills": top,
+                "total_jobs_analyzed": total,
                 "analysis_date": datetime.now().isoformat()
             }
-
         except Exception as e:
             print(f"Error analyzing skills demand: {e}")
-            return {}
+            return {"top_skills": [], "total_jobs_analyzed": 0, "analysis_date": datetime.now().isoformat()}

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Loader2, AlertCircle } from 'lucide-react';
 import useAuthStore from '../store/authStore';
@@ -9,10 +9,18 @@ export const AuthCallback = () => {
   const [searchParams] = useSearchParams();
   const { handleGoogleCallback, handleGitHubCallback } = useAuthStore();
   const [error, setError] = useState('');
+  // OAuth codes are single-use; React StrictMode runs effects twice in development,
+  // and a second exchange would fail and overwrite the successful login.
+  const handledCode = useRef(null);
 
   useEffect(() => {
     const code = searchParams.get('code');
     const errorParam = searchParams.get('error');
+
+    if (code && handledCode.current === code) {
+      return;
+    }
+    handledCode.current = code;
 
     if (errorParam) {
       setError(`Authentication failed: ${errorParam}`);

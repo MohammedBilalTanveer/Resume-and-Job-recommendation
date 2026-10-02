@@ -18,6 +18,8 @@ services:
       # --- generated / fixed values ---
       - key: SECRET_KEY           # signs login tokens; must stay the same across restarts
         generateValue: true
+      - key: JOBS_REFRESH_TOKEN   # copy this value into the GitHub secret JOBS_REFRESH_TOKEN
+        generateValue: true
       - key: MONGODB_DB_NAME
         value: resume_ats
       - key: ATS_SEMANTIC_MODEL   # set to "on" on a plan with >= 1 GB RAM for best accuracy
@@ -33,6 +35,7 @@ services:
         sync: false
       - key: JOOBLE_API_KEY
         sync: false
+      # OAuth: GOOGLE_CLIENT_API / GOOGLE_SECRET_API / GITHUB_SECRET_KEY are accepted as alternative names
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET

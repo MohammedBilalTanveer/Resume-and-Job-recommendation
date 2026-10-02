@@ -1,12 +1,15 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Header
 from fastapi.concurrency import run_in_threadpool
 from typing import Optional, List
 from pydantic import BaseModel
+import asyncio
+import secrets
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+from backend.config import settings
 from backend.services.job_service import JobService
 from backend.utils.ats_scorer import ATSScorer
 
@@ -137,6 +140,42 @@ async def match_resume_to_job(request: MatchResumeRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+def _check_refresh_token(token: Optional[str]):
+    expected = settings.JOBS_REFRESH_TOKEN
+    if not expected:
+        raise HTTPException(status_code=503, detail="Job refresh is disabled (JOBS_REFRESH_TOKEN not set)")
+    if not token or not secrets.compare_digest(token, expected):
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+
+_refresh_tasks = set()
+
+
+@router.post("/refresh", status_code=202)
+async def refresh_job_catalog(
+    x_refresh_token: Optional[str] = Header(None),
+    max_calls: Optional[int] = Query(None, ge=0, le=250, description="Cap Adzuna calls for this run"),
+):
+    """
+    Start today's rotating fetch of jobs into the catalog (runs in the background).
+    Called once a day by the GitHub Actions workflow; needs the X-Refresh-Token header.
+    """
+    _check_refresh_token(x_refresh_token)
+    if job_service.refresh_state.get("running"):
+        return {"status": "already_running", "progress": job_service.refresh_state}
+    task = asyncio.create_task(job_service.run_refresh(max_adzuna_calls=max_calls))
+    _refresh_tasks.add(task)  # keep a reference so the task isn't garbage-collected
+    task.add_done_callback(_refresh_tasks.discard)
+    return {"status": "started"}
+
+
+@router.get("/refresh/status")
+async def refresh_job_catalog_status(x_refresh_token: Optional[str] = Header(None)):
+    """Progress of the current/last refresh, catalog size and API quota usage."""
+    _check_refresh_token(x_refresh_token)
+    return await job_service.refresh_status()
+
 
 @router.get("/trending")
 async def get_trending_jobs(

@@ -1,0 +1,53 @@
+# Daily job-catalog refresh: calls the backend, which fetches today's rotating slice
+# of searches from Adzuna (within quota) and stores the jobs in MongoDB.
+#
+# Setup (GitHub repo -> Settings -> Secrets and variables -> Actions):
+#   JOBS_API_URL        e.g. https://intellidiots-api.onrender.com   (no trailing slash)
+#   JOBS_REFRESH_TOKEN  same value as JOBS_REFRESH_TOKEN on Render
+# Run it by hand any time from the Actions tab ("Run workflow").
+name: Refresh job catalog
+
+on:
+  schedule:
+    - cron: "30 0 * * *"   # 00:30 UTC = 06:00 IST, daily
+  workflow_dispatch:
+    inputs:
+      max_calls:
+        description: "Max Adzuna calls for this run (empty = daily budget)"
+        required: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Wake the API (Render free instances sleep when idle)
+        run: |
+          for i in 1 2 3 4 5 6; do
+            if curl -fsS --max-time 60 "${{ secrets.JOBS_API_URL }}/health"; then echo; exit 0; fi
+            echo "API not up yet, retrying in 20s..."; sleep 20
+          done
+          echo "API did not respond"; exit 1
+
+      - name: Start refresh
+        env:
+          MAX_CALLS: ${{ github.event.inputs.max_calls }}
+        run: |
+          url="${{ secrets.JOBS_API_URL }}/api/v1/jobs/refresh"
+          if [ -n "$MAX_CALLS" ]; then url="$url?max_calls=$MAX_CALLS"; fi
+          curl -fsS --max-time 60 -X POST "$url" -H "X-Refresh-Token: ${{ secrets.JOBS_REFRESH_TOKEN }}"
+          echo
+
+      - name: Wait for it to finish and print the summary
+        run: |
+          for i in $(seq 1 40); do
+            sleep 15
+            status=$(curl -fsS --max-time 30 "${{ secrets.JOBS_API_URL }}/api/v1/jobs/refresh/status" \
+                     -H "X-Refresh-Token: ${{ secrets.JOBS_REFRESH_TOKEN }}" || true)
+            if echo "$status" | grep -q '"running":false'; then
+              echo "$status" | python3 -m json.tool | head -60
+              exit 0
+            fi
+            echo "still running..."
+          done
+          echo "Refresh still running after 10 minutes (it continues on the server)"
