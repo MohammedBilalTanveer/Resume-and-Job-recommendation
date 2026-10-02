@@ -3,7 +3,11 @@ Semantic similarity with a sentence-embedding model (all-MiniLM-L6-v2),
 loaded directly through `transformers` and falling back to TF-IDF when the
 model is unavailable (no internet / low-memory hosts).
 
-Set ATS_SEMANTIC_MODEL=off to force the TF-IDF fallback.
+ATS_SEMANTIC_MODEL:
+  off  - always use the TF-IDF fallback
+  on   - always load the model (needs ~350 MB extra RAM)
+  auto - (default) load it only when the machine has enough memory, so a
+         512 MB host (e.g. Render free) isn't killed for running out of memory
 """
 
 import os
@@ -15,6 +19,45 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 MODEL_NAME = os.getenv("ATS_EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+# The whole backend needs ~510 MB with the model loaded vs ~160 MB without
+MIN_MEMORY_MB_FOR_MODEL = int(os.getenv("ATS_SEMANTIC_MIN_MEMORY_MB", "1024"))
+
+
+def _container_memory_limit_mb() -> Optional[int]:
+    """Memory limit of this container (cgroup v2 / v1), or None if there is none / unknown."""
+    for path in ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory/memory.limit_in_bytes"):
+        try:
+            with open(path) as f:
+                raw = f.read().strip()
+        except OSError:
+            continue
+        if raw == "max":
+            return None
+        try:
+            value = int(raw)
+        except ValueError:
+            continue
+        return None if value >= 1 << 60 else value // (1024 * 1024)
+    return None
+
+
+def _model_enabled() -> bool:
+    mode = os.getenv("ATS_SEMANTIC_MODEL", "auto").strip().lower()
+    if mode in {"off", "0", "false", "no"}:
+        return False
+    if mode in {"on", "1", "true", "yes", "force"}:
+        return True
+    limit = _container_memory_limit_mb()
+    if limit is not None and limit < MIN_MEMORY_MB_FOR_MODEL:
+        print(f"[INFO] Semantic model skipped: container memory limit {limit} MB < {MIN_MEMORY_MB_FOR_MODEL} MB "
+              f"(set ATS_SEMANTIC_MODEL=on to force)")
+        return False
+    if limit is None and os.getenv("RENDER"):
+        # Render doesn't always expose the limit; its free/starter plans have 512 MB
+        print("[INFO] Semantic model skipped on Render (memory limit unknown); "
+              "set ATS_SEMANTIC_MODEL=on on plans with >= 1 GB RAM")
+        return False
+    return True
 
 
 class SemanticEncoder:
@@ -41,7 +84,7 @@ class SemanticEncoder:
                 self._done.set()
 
     def _load_model(self):
-        if os.getenv("ATS_SEMANTIC_MODEL", "on").lower() in {"off", "0", "false", "no"}:
+        if not _model_enabled():
             return
         try:
             import torch
